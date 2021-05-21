@@ -15,6 +15,13 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+-- mettre le code pour le role
+CREATE USER sviss;
+CREATE USER postgres; 
+CREATE USER coleo; 
+CREATE USER belv1601;
+CREATE USER admins;
+CREATE USER atlas_reader;
 --
 -- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: 
 --
