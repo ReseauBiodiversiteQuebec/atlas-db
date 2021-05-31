@@ -1,5 +1,2 @@
 FROM postgis/postgis
-COPY ./schema_dump.sql /docker-entrypoint-initdb.d/atlas-db.sql
-
-
-
+COPY ./pose_dev.sql /docker-entrypoint-initdb.d/pose_dev.sql

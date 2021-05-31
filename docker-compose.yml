@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+    atlas-db:
+        build:
+            context: .
+        ports:
+            - 5434:5432
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${PG_PASS}
+            POSTGRES_DB: ${POSTGRES_DB}
