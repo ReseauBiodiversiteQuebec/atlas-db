@@ -20,3 +20,14 @@ It can be created by runnning `make.sh` from `postgres` vm, using the `postgres`
 sudo su postgres
 source make_dump.sh
 ```
+
+## postgRest api 
+try first to get the ip address of the container by:
+```
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' (<container_id> or <container_name>)
+```
+
+then you can try: 
+```
+curl http://<container_ip>:3000/<resourse>
+```
