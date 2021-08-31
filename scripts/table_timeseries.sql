@@ -38,7 +38,7 @@ DROP TRIGGER IF EXISTS
 
 CREATE TRIGGER time_series_update_at
   BEFORE UPDATE ON public.time_series FOR EACH ROW
-  EXECUTE FUNCTION trigger_set_timestamp();
+  EXECUTE PROCEDURE trigger_set_timestamp();
 
 GRANT SELECT ON TABLE public.time_series TO atlas_reader;
 
