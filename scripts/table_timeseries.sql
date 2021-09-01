@@ -1,5 +1,3 @@
-CREATE EXTENSION spi;
-
 DROP TABLE IF EXISTS public.time_series CASCADE;
 
 CREATE TABLE IF NOT EXISTS public.time_series (
