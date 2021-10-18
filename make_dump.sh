@@ -22,11 +22,11 @@ from public.observations
 order by random()
 limit 60000;'
 
-echo "COPY public.observations FROM stdin;">>$out_file
-psql -c 'COPY test_observations TO stdout'>>$out_file
-echo "\.">>$out_file
+echo "COPY public.observations FROM stdin;">>$obs_file
+psql -c 'COPY test_observations TO stdout'>>$obs_file
+echo "\.">>$obs_file
 
-echo "COPY public.obs_efforts FROM stdin;">>$out_file
+echo "COPY public.obs_efforts FROM stdin;">>$obs_file
 psql -c '
 COPY (
     SELECT *
@@ -34,7 +34,7 @@ COPY (
     WHERE id_obs IN (
         SELECT obs.id
         FROM test_observations obs))
-TO stdout'>>$out_file
-echo "\.">>$out_file
+TO stdout'>>$obs_file
+echo "\.">>$obs_file
 
 psql -c "drop table test_observations;"
