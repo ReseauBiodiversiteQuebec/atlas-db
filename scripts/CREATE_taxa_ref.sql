@@ -2,8 +2,10 @@
 CREATE EXTENSION IF NOT EXISTS plpython3u;
 
 -- CREATE FUNCTION TO ACCESS REFERENCE TAXA FROM GLOBAL NAMES
-DROP FUNCTION IF EXISTS public.get_taxa_ref_gnames(text);
-CREATE FUNCTION public.get_taxa_ref_gnames(name text)
+DROP FUNCTION IF EXISTS public.get_taxa_ref_gnames(text, text);
+CREATE FUNCTION public.get_taxa_ref_gnames(
+    name text,
+    authorship text DEFAULT NULL)
 RETURNS TABLE (
     source_name text,
     source_id numeric,
@@ -103,7 +105,7 @@ AS $function$
 
 $function$;
 
--- SELECT * FROM public.get_taxa_ref_gnames('Cyanocitta cristata');
+SELECT * FROM public.get_taxa_ref_gnames('Cyanocitta cristata');
 
 -- TODO verify what function was created and reuse it
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
@@ -126,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.taxa_ref (
     valid_srid text NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    modified_by text DEFAULT CURRENT_USER NOT NULL,
+    modified_by text NOT NULL DEFAULT CURRENT_USER,
     UNIQUE (source_name, source_record_id)
 );
 CREATE INDEX IF NOT EXISTS source_id_srid_idx
@@ -166,9 +168,10 @@ CREATE INDEX IF NOT EXISTS id_taxa_ref_idx
 --
 
 --FUZZY MATCHING OF SCIENTIFIC NAME
-DROP FUNCTION IF EXISTS find_taxa_obs(scientific_name text);
-CREATE FUNCTION find_taxa_obs(
-    scientific_name text)
+DROP FUNCTION IF EXISTS get_taxa_obs_from_name(text, text);
+CREATE FUNCTION get_taxa_obs_from_name(
+    scientific_name text,
+    authorship text DEFAULT NULL)
 RETURNS SETOF public.taxa_obs AS $$
     WITH source_ref AS (
         SELECT *
@@ -188,16 +191,21 @@ RETURNS SETOF public.taxa_obs AS $$
     WHERE source_ref.rank = (SELECT rank from source_ref limit 1);
 $$ LANGUAGE sql;
 
+-- INSERT taxa_ref from obs record field
 
-DROP FUNCTION IF EXISTS proc_taxa_insert_ref() CASCADE;
-CREATE FUNCTION proc_taxa_insert_ref()
-RETURNS TRIGGER AS
+DROP FUNCTION IF EXISTS insert_taxa_ref_from_obs(integer, text, text) CASCADE;
+CREATE OR REPLACE FUNCTION insert_taxa_ref_from_obs(
+    new_id integer,
+    new_scientific_name text,
+    new_authorship text DEFAULT NULL
+)
+RETURNS void AS
 $BODY$
 BEGIN
     DROP TABLE IF EXISTS temp_src_taxa_ref;
     CREATE TEMPORARY TABLE temp_src_taxa_ref AS (
         SELECT source_ref.*, taxa_ref.id id_taxa_ref
-        FROM get_taxa_ref_gnames(NEW.scientific_name) source_ref
+        FROM get_taxa_ref_gnames(new_scientific_name, new_authorship) source_ref
         LEFT JOIN public.taxa_ref taxa_ref
             ON source_ref.source_id = taxa_ref.source_id
             AND source_ref.source_record_id = taxa_ref.source_record_id
@@ -234,42 +242,55 @@ BEGIN
         AND temp_src_taxa_ref.source_record_id = ins_ref.source_record_id;
 
     INSERT INTO public.taxa_obs_ref_lookup (id_taxa_obs, id_taxa_ref)
-        SELECT NEW.id, src_ref.id_taxa_ref
+        SELECT new_id, src_ref.id_taxa_ref
         FROM temp_src_taxa_ref src_ref
         ON CONFLICT DO NOTHING;
-
-    RETURN NEW;
 END;
 $BODY$
 LANGUAGE 'plpgsql';
 
--- CREATE the trigger:
-CREATE TRIGGER trigger_taxa_insert_ref AFTER INSERT
+
+-- CREATE the trigger for insertion:
+
+CREATE OR REPLACE FUNCTION trigger_insert_taxa_ref_from_obs()
+RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM insert_taxa_ref_from_obs(
+        NEW.id, NEW.scientific_name, NEW.authorship
+        );
+    RETURN NEW;
+END;
+$$ LANGUAGE 'plpgsql';
+
+DROP TRIGGER IF EXISTS taxa_insert_ref ON public.taxa_obs;
+CREATE TRIGGER taxa_insert_ref AFTER INSERT
 ON public.taxa_obs
 FOR EACH ROW
-EXECUTE PROCEDURE proc_taxa_insert_ref();
+EXECUTE PROCEDURE trigger_insert_taxa_ref_from_obs();
+
+-- TEST queries
 
 DELETE FROM public.taxa_ref;
 DELETE FROM public.taxa_obs;
 DELETE FROM public.taxa_obs_ref_lookup;
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Cyanocitta cristata');
-SELECT COUNT(id) FROM public.taxa_obs;
-SELECT COUNT(id) FROM public.taxa_ref;
-SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Antigone canadensis');
-SELECT COUNT(id) FROM public.taxa_obs;
-SELECT COUNT(id) FROM public.taxa_ref;
-SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Antigone cacadensis');
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Grus canadensis');
-SELECT COUNT(id) FROM public.taxa_obs;
-SELECT COUNT(id) FROM public.taxa_ref;
-SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer sp.');
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer saccharum.');
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer nigrum');
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer');
-INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer rubrum');
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Cyanocitta cristata');
+-- SELECT COUNT(id) FROM public.taxa_obs;
+-- SELECT COUNT(id) FROM public.taxa_ref;
+-- SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Antigone canadensis');
+-- SELECT COUNT(id) FROM public.taxa_obs;
+-- SELECT COUNT(id) FROM public.taxa_ref;
+-- SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Antigone cacadensis');
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Grus canadensis');
+-- SELECT COUNT(id) FROM public.taxa_obs;
+-- SELECT COUNT(id) FROM public.taxa_ref;
+-- SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer sp.');
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer saccharum.');
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer nigrum');
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer');
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer rubrum');
 
 
 
