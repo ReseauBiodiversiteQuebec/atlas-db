@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS plpython3u;
 DROP FUNCTION IF EXISTS public.get_taxa_ref_gnames(text, text);
 CREATE FUNCTION public.get_taxa_ref_gnames(
     name text,
-    authorship text DEFAULT NULL)
+    name_authorship text DEFAULT NULL)
 RETURNS TABLE (
     source_name text,
     source_id numeric,
@@ -15,7 +15,8 @@ RETURNS TABLE (
     rank text,
     rank_order integer,
     valid boolean,
-    valid_srid text
+    valid_srid text,
+    match_type text
 )
 LANGUAGE plpython3u
 AS $function$
@@ -45,7 +46,8 @@ AS $function$
                 "rank": gn_result["classificationRanks"].split("|")[-1],
                 "rank_order": gn_result["classificationRanks"].count("|") + 1,
                 "valid": is_valid,
-                "valid_srid": gn_result["currentRecordId"]
+                "valid_srid": gn_result["currentRecordId"],
+                "match_type": gn_result["matchType"].lower()
             })
         for rank_order, taxa_attributes in enumerate(zip(
             gn_result["classificationPath"].split("|"),
@@ -57,8 +59,10 @@ AS $function$
             #     continue
             if rank == gn_result["classificationRanks"].split("|")[-1]:
                 valid_authorship = find_authorship(gn_result["matchedName"])
+                match_type = gn_result["matchType"].lower()
             else:
                 valid_authorship = ""
+                match_type = "parent"
             out.append(
                 {
                     "source_id": gn_result["dataSourceId"],
@@ -69,14 +73,18 @@ AS $function$
                     "rank": rank,
                     "rank_order": rank_order,
                     "valid": True,
-                    "valid_srid": srid
+                    "valid_srid": srid,
+                    "match_type": match_type
                 }
             )
         return out
 
     host = "https://verifier.globalnames.org"
     path_prefix = "api/v1/verifications"
-    path_name = quote_plus(name)
+    if isinstance(name_authorship, str) and name_authorship.strip():
+        path_name = quote_plus(" ".join([name, name_authorship]))
+    else:
+        path_name = quote_plus(name)
     params = urlencode(
         {'pref_sources': "|".join(['%.0f' % v for v in [1, 11, 147]])}
     )
