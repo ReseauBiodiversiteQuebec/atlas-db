@@ -45,6 +45,8 @@ AS $function$
                 "authorship": find_authorship(gn_result["matchedName"]),
                 "rank": gn_result["classificationRanks"].split("|")[-1],
                 "rank_order": gn_result["classificationRanks"].count("|") + 1,
+                "classification_srids": 
+                    [int(v) for v in gn_result["classificationIds"].split("|")],
                 "valid": is_valid,
                 "valid_srid": gn_result["currentRecordId"],
                 "match_type": gn_result["matchType"].lower()
@@ -55,14 +57,13 @@ AS $function$
             gn_result["classificationIds"].split("|"))
         ):
             taxa, rank, srid = taxa_attributes
-            # if rank not in ["family", "species", "subspecies"]:
-            #     continue
+            match_type = None
             if rank == gn_result["classificationRanks"].split("|")[-1]:
                 valid_authorship = find_authorship(gn_result["matchedName"])
-                match_type = gn_result["matchType"].lower()
+                if is_valid:
+                    match_type = gn_result["matchType"].lower()
             else:
-                valid_authorship = ""
-                match_type = "parent"
+                valid_authorship = None
             out.append(
                 {
                     "source_id": gn_result["dataSourceId"],
@@ -72,6 +73,8 @@ AS $function$
                     "authorship": valid_authorship,
                     "rank": rank,
                     "rank_order": rank_order,
+                    "classification_srids":
+                        gn_result["classificationIds"].split("|"),
                     "valid": True,
                     "valid_srid": srid,
                     "match_type": match_type
@@ -113,7 +116,10 @@ AS $function$
 
 $function$;
 
-SELECT * FROM public.get_taxa_ref_gnames('Cyanocitta cristata');
+-- TEST get_taxa_ref_gnames
+-- SELECT * FROM public.get_taxa_ref_gnames('Cyanocitta cristata');
+-- SELECT * FROM public.get_taxa_ref_gnames('Antigone canadensis');
+
 
 -- TODO verify what function was created and reuse it
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
@@ -124,6 +130,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+-- CREATE `taxa_ref` table and related resources
+
+DROP TABLE IF EXISTS public.taxa_ref CASCADE;
 CREATE TABLE IF NOT EXISTS public.taxa_ref (
     id SERIAL PRIMARY KEY,
     source_name text NOT NULL,
@@ -132,7 +142,7 @@ CREATE TABLE IF NOT EXISTS public.taxa_ref (
     scientific_name text NOT NULL,
     authorship text,
     rank text NOT NULL,
-    valid text NOT NULL,
+    valid boolean NOT NULL,
     valid_srid text NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -142,10 +152,14 @@ CREATE TABLE IF NOT EXISTS public.taxa_ref (
 CREATE INDEX IF NOT EXISTS source_id_srid_idx
   ON public.taxa_ref (source_id, valid_srid);
 
-CREATE TRIGGER taxa_ref_modified_at
+DROP TRIGGER IF EXISTS update_modified_at ON public.taxa_ref;
+CREATE TRIGGER update_modified_at
   BEFORE UPDATE ON public.taxa_ref FOR EACH ROW
   EXECUTE PROCEDURE trigger_set_timestamp();
 
+
+-- CREATE `taxa_obs` table and related resources
+DROP TABLE IF EXISTS public.taxa_obs CASCADE;
 CREATE TABLE IF NOT EXISTS public.taxa_obs (
     id SERIAL PRIMARY KEY,
     scientific_name text NOT NULL,
@@ -157,13 +171,17 @@ CREATE TABLE IF NOT EXISTS public.taxa_obs (
     UNIQUE (scientific_name, authorship)
 );
 
-CREATE TRIGGER taxa_obs_modified_at
+DROP TRIGGER IF EXISTS update_modified_at ON public.taxa_obs;
+CREATE TRIGGER update_modified_at
   BEFORE UPDATE ON public.taxa_obs FOR EACH ROW
   EXECUTE PROCEDURE trigger_set_timestamp();
 
+-- CREATE `taxa_obs_ref_lookup` table and related resources
+DROP TABLE IF EXISTS public.taxa_obs_ref_lookup CASCADE;
 CREATE TABLE IF NOT EXISTS public.taxa_obs_ref_lookup (
     id_taxa_obs integer NOT NULL,
     id_taxa_ref integer NOT NULL,
+    id_taxa_ref_valid integer NOT NULL,
     match_type text,
     UNIQUE (id_taxa_obs, id_taxa_ref)
 );
@@ -173,9 +191,12 @@ CREATE INDEX IF NOT EXISTS id_taxa_obs_idx
 
 CREATE INDEX IF NOT EXISTS id_taxa_ref_idx
   ON public.taxa_obs_ref_lookup (id_taxa_ref);
---
 
---FUZZY MATCHING OF SCIENTIFIC NAME
+CREATE INDEX IF NOT EXISTS id_taxa_ref_valid_idx
+  ON public.taxa_obs_ref_lookup (id_taxa_ref_valid);
+
+
+--Procedures FUZZY MATCHING OF SCIENTIFIC NAME
 DROP FUNCTION IF EXISTS get_taxa_obs_from_name(text, text);
 CREATE FUNCTION get_taxa_obs_from_name(
     scientific_name text,
@@ -243,22 +264,29 @@ BEGIN
         ON CONFLICT DO NOTHING
         RETURNING id AS id_taxa_ref, source_record_id, source_id)
     UPDATE temp_src_taxa_ref
-    SET id_taxa_ref = ins_ref.id_taxa_ref
-    FROM ins_ref
-    WHERE
-        temp_src_taxa_ref.source_id = ins_ref.source_id
-        AND temp_src_taxa_ref.source_record_id = ins_ref.source_record_id;
+        SET id_taxa_ref = ins_ref.id_taxa_ref
+        FROM ins_ref
+        WHERE
+            temp_src_taxa_ref.source_id = ins_ref.source_id
+            AND temp_src_taxa_ref.source_record_id = ins_ref.source_record_id;
 
-    INSERT INTO public.taxa_obs_ref_lookup (id_taxa_obs, id_taxa_ref)
-        SELECT new_id, src_ref.id_taxa_ref
+    INSERT INTO public.taxa_obs_ref_lookup (
+            id_taxa_obs, id_taxa_ref, id_taxa_ref_valid, match_type)
+        SELECT
+            new_id AS id_taxa_obs,
+            src_ref.id_taxa_ref AS id_taxa_ref,
+            _id_join.id_taxa_ref AS id_taxa_ref_valid,
+            src_ref.match_type AS match_type
         FROM temp_src_taxa_ref src_ref
+        LEFT JOIN temp_src_taxa_ref _id_join
+            ON src_ref.valid_srid = _id_join.source_record_id
         ON CONFLICT DO NOTHING;
 END;
 $BODY$
 LANGUAGE 'plpgsql';
 
 
--- CREATE the trigger for insertion:
+-- CREATE the trigger for taxa_ref insertion:
 
 CREATE OR REPLACE FUNCTION trigger_insert_taxa_ref_from_obs()
 RETURNS TRIGGER AS $$
