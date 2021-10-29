@@ -25,13 +25,15 @@ AS $function$
     import json
     import re
 
-    def find_authorship(name):
+    def find_authorship(name, name_simple):
+        authorship = name.replace(name_simple, '')
+        authorship = authorship.strip()
         try:
-            return re.search(
-                "(?<=\().*(?=\))", name
-            ).group()
-        except AttributeError:
-            return " ".join(name.split(" ")[1:])
+            if authorship[0] == '(' and authorship[-1] == ')':
+                authorship = authorship.lstrip('(').rstrip(')')
+        except IndexError:
+            pass
+        return authorship
 
     def to_taxa_ref(gn_result):
         is_valid = gn_result["currentRecordId"] == gn_result["recordId"]
@@ -42,11 +44,13 @@ AS $function$
                 "source_record_id": gn_result["recordId"],
                 "source_name": gn_result["dataSourceTitleShort"],
                 "scientific_name": gn_result["matchedCanonicalFull"],
-                "authorship": find_authorship(gn_result["matchedName"]),
+                "authorship": find_authorship(
+                    gn_result["matchedName"],
+                    gn_result["matchedCanonicalFull"]),
                 "rank": gn_result["classificationRanks"].split("|")[-1],
                 "rank_order": gn_result["classificationRanks"].count("|") + 1,
-                "classification_srids": 
-                    [int(v) for v in gn_result["classificationIds"].split("|")],
+                "classification_srids":
+                    gn_result["classificationIds"].split("|"),
                 "valid": is_valid,
                 "valid_srid": gn_result["currentRecordId"],
                 "match_type": gn_result["matchType"].lower()
@@ -59,7 +63,9 @@ AS $function$
             taxa, rank, srid = taxa_attributes
             match_type = None
             if rank == gn_result["classificationRanks"].split("|")[-1]:
-                valid_authorship = find_authorship(gn_result["matchedName"])
+                valid_authorship = find_authorship(
+                    gn_result["matchedName"],
+                    gn_result["matchedCanonicalFull"])
                 if is_valid:
                     match_type = gn_result["matchType"].lower()
             else:
@@ -89,7 +95,7 @@ AS $function$
     else:
         path_name = quote_plus(name)
     params = urlencode(
-        {'pref_sources': "|".join(['%.0f' % v for v in [1, 11, 147]])}
+        {'pref_sources': "|".join(['%.0f' % v for v in [1, 3, 11, 147]])}
     )
 
     req = Request(
@@ -195,31 +201,6 @@ CREATE INDEX IF NOT EXISTS id_taxa_ref_idx
 CREATE INDEX IF NOT EXISTS id_taxa_ref_valid_idx
   ON public.taxa_obs_ref_lookup (id_taxa_ref_valid);
 
-
---Procedures FUZZY MATCHING OF SCIENTIFIC NAME
-DROP FUNCTION IF EXISTS get_taxa_obs_from_name(text, text);
-CREATE FUNCTION get_taxa_obs_from_name(
-    scientific_name text,
-    authorship text DEFAULT NULL)
-RETURNS SETOF public.taxa_obs AS $$
-    WITH source_ref AS (
-        SELECT *
-        FROM get_taxa_ref_gnames(scientific_name)
-        WHERE valid
-        ORDER BY rank_order DESC
-    )
-    SELECT DISTINCT(taxa_obs.*)
-    FROM source_ref
-    LEFT JOIN public.taxa_ref taxa_ref
-        ON source_ref.source_id = taxa_ref.source_id
-        AND source_ref.valid_srid = taxa_ref.valid_srid
-    LEFT JOIN public.taxa_obs_ref_lookup lookup on
-        taxa_ref.id = lookup.id_taxa_ref
-    LEFT JOIN public.taxa_obs taxa_obs on
-        lookup.id_taxa_obs = taxa_obs.id
-    WHERE source_ref.rank = (SELECT rank from source_ref limit 1);
-$$ LANGUAGE sql;
-
 -- INSERT taxa_ref from obs record field
 
 DROP FUNCTION IF EXISTS insert_taxa_ref_from_obs(integer, text, text) CASCADE;
@@ -304,16 +285,60 @@ ON public.taxa_obs
 FOR EACH ROW
 EXECUTE PROCEDURE trigger_insert_taxa_ref_from_obs();
 
+-- -- List observed taxa
+CREATE OR REPLACE VIEW list_valid_taxa AS
+    SELECT DISTINCT(taxa_ref.*)
+    FROM public.taxa_obs_ref_lookup lookup
+    LEFT JOIN public.taxa_ref taxa_ref on lookup.id_taxa_ref_valid = taxa_ref.id
+    WHERE lookup.match_type is not null;
+
+
+--Procedures FUZZY MATCHING OF SCIENTIFIC NAME
+DROP FUNCTION IF EXISTS get_taxa_obs_from_name(text, text);
+CREATE FUNCTION get_taxa_obs_from_name(
+    scientific_name text,
+    authorship text DEFAULT NULL)
+RETURNS SETOF public.taxa_obs AS $$
+    SELECT DISTINCT(taxa_obs.*)
+    FROM get_taxa_ref_gnames(scientific_name, authorship) source_ref
+    LEFT JOIN public.taxa_ref taxa_ref
+        ON source_ref.source_id = taxa_ref.source_id
+        AND source_ref.valid_srid = taxa_ref.valid_srid
+    LEFT JOIN public.taxa_obs_ref_lookup lookup on
+        taxa_ref.id = lookup.id_taxa_ref_valid
+    LEFT JOIN public.taxa_obs taxa_obs on
+        lookup.id_taxa_obs = taxa_obs.id
+    WHERE source_ref.valid AND source_ref.match_type is not null;
+$$ LANGUAGE sql;
+
+-- Get taxa_obs ref
+CREATE OR REPLACE VIEW observations_taxa_ref AS
+    SELECT obs.*, lookup.id_taxa_ref_valid
+    FROM observations obs
+    LEFT JOIN taxa_obs_ref_lookup lookup ON obs.id_taxa_obs = lookup.id_taxa_obs
+    WHERE lookup.match_type is not null;
+
+DROP FUNCTION IF EXISTS get_observation_from_taxa(text, text);
+CREATE FUNCTION get_observation_from_taxa(
+    name text,
+    authorship text DEFAULT NULL)
+RETURNS SETOF observations_taxa_ref AS $$
+    SELECT obs.*
+    FROM get_taxa_obs_from_name(name, authorship) taxa_obs
+    LEFT JOIN public.observations_taxa_ref obs
+        ON taxa_obs.id = obs.id_taxa_obs
+$$ LANGUAGE sql;
+
 -- TEST queries
 
-DELETE FROM public.taxa_ref;
-DELETE FROM public.taxa_obs;
-DELETE FROM public.taxa_obs_ref_lookup;
+-- DELETE FROM public.taxa_ref;
+-- DELETE FROM public.taxa_obs;
+-- DELETE FROM public.taxa_obs_ref_lookup;
 -- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Cyanocitta cristata');
 -- SELECT COUNT(id) FROM public.taxa_obs;
 -- SELECT COUNT(id) FROM public.taxa_ref;
 -- SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
--- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Antigone canadensis');
+-- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Antigone nanadensis');
 -- SELECT COUNT(id) FROM public.taxa_obs;
 -- SELECT COUNT(id) FROM public.taxa_ref;
 -- SELECT COUNT(*) FROM public.taxa_obs_ref_lookup;
