@@ -94,8 +94,10 @@ AS $function$
         path_name = quote_plus(" ".join([name, name_authorship]))
     else:
         path_name = quote_plus(name)
+    path_name = path_name.lower()
     params = urlencode(
-        {'pref_sources': "|".join(['%.0f' % v for v in [1, 3, 11, 147]])}
+        {'pref_sources': "|".join(['%.0f' % v for v in [1, 3, 11, 147]]),
+         'capitalize': "true"}
     )
 
     req = Request(
@@ -114,11 +116,14 @@ AS $function$
         else:
             return e
     else:
-        out = json.loads(data.read().decode('utf-8'))
-        out = [taxa_ref for species in out
-            for rec in species['preferredResults']
-            for taxa_ref in to_taxa_ref(rec)]
-        return out
+        try:
+            out = json.loads(data.read().decode('utf-8'))
+            out = [taxa_ref for species in out
+                for rec in species['preferredResults']
+                for taxa_ref in to_taxa_ref(rec)]
+            return out
+        except KeyError:
+            return [None]
 
 $function$;
 
