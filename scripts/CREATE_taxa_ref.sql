@@ -1,6 +1,12 @@
 -- INSTALL python PL EXTENSION TO SUPPORT API CALL
 CREATE EXTENSION IF NOT EXISTS plpython3u;
 
+-- DO
+-- $$
+-- import pip
+-- pip.install('bdqc-taxa')
+-- $$ LANGUAGE plpython3u;
+
 -- CREATE FUNCTION TO ACCESS REFERENCE TAXA FROM GLOBAL NAMES
 DROP FUNCTION IF EXISTS public.get_taxa_ref_gnames(text, text);
 CREATE FUNCTION public.get_taxa_ref_gnames(
@@ -16,10 +22,12 @@ RETURNS TABLE (
     rank_order integer,
     valid boolean,
     valid_srid text,
+    classification_srids text[],
     match_type text
 )
 LANGUAGE plpython3u
 AS $function$
+# def get_taxa_ref_gnames(name, name_authorship):
     from urllib.request import Request, urlopen, URLError, HTTPError
     from urllib.parse import urlencode, quote_plus
     import json
@@ -80,7 +88,7 @@ AS $function$
                     "rank": rank,
                     "rank_order": rank_order,
                     "classification_srids":
-                        gn_result["classificationIds"].split("|"),
+                        gn_result["classificationIds"].split("|")[:rank_order + 1],
                     "valid": True,
                     "valid_srid": srid,
                     "match_type": match_type
@@ -88,6 +96,7 @@ AS $function$
             )
         return out
 
+    
     host = "https://verifier.globalnames.org"
     path_prefix = "api/v1/verifications"
     if isinstance(name_authorship, str) and name_authorship.strip():
@@ -155,6 +164,7 @@ CREATE TABLE IF NOT EXISTS public.taxa_ref (
     rank text NOT NULL,
     valid boolean NOT NULL,
     valid_srid text NOT NULL,
+    classification_srids text[],
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by text NOT NULL DEFAULT CURRENT_USER,
@@ -235,7 +245,8 @@ BEGIN
             authorship,
             rank,
             valid,
-            valid_srid
+            valid_srid,
+            classification_srids
         )
         SELECT
             source_name,
@@ -245,7 +256,8 @@ BEGIN
             authorship,
             rank,
             valid,
-            valid_srid
+            valid_srid,
+            classification_srids
         FROM temp_src_taxa_ref
         ON CONFLICT DO NOTHING
         RETURNING id AS id_taxa_ref, source_record_id, source_id)
