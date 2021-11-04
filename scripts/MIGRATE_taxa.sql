@@ -1,4 +1,3 @@
-ALTER TABLE public.observations ADD COLUMN id_taxa_obs integer;
 
 DO language 'plpgsql'
 $$

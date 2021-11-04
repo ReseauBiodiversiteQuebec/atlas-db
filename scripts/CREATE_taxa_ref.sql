@@ -3,8 +3,11 @@ CREATE EXTENSION IF NOT EXISTS plpython3u;
 
 -- DO
 -- $$
--- import pip
--- pip.install('bdqc-taxa')
+-- import subprocess
+-- BDQC_TAXA_REPO = 'https://github.com/ReseauBiodiversiteQuebec/bdqc_taxa'
+-- package_path = str(Path(subprocess.__file__).parent)
+-- subprocess.run(['git', 'clone', 'BDQC_TAXA_REPO'])
+-- subprocess.run(['python3', 'bdqc_taxa/setup.py', 'install'])
 -- $$ LANGUAGE plpython3u;
 
 -- CREATE FUNCTION TO ACCESS REFERENCE TAXA FROM GLOBAL NAMES
@@ -27,113 +30,9 @@ RETURNS TABLE (
 )
 LANGUAGE plpython3u
 AS $function$
-# def get_taxa_ref_gnames(name, name_authorship):
-    from urllib.request import Request, urlopen, URLError, HTTPError
-    from urllib.parse import urlencode, quote_plus
-    import json
-    import re
-
-    def find_authorship(name, name_simple):
-        authorship = name.replace(name_simple, '')
-        authorship = authorship.strip()
-        try:
-            if authorship[0] == '(' and authorship[-1] == ')':
-                authorship = authorship.lstrip('(').rstrip(')')
-        except IndexError:
-            pass
-        return authorship
-
-    def to_taxa_ref(gn_result):
-        is_valid = gn_result["currentRecordId"] == gn_result["recordId"]
-        out = []
-        if not is_valid:
-            out.append({
-                "source_id": gn_result["dataSourceId"],
-                "source_record_id": gn_result["recordId"],
-                "source_name": gn_result["dataSourceTitleShort"],
-                "scientific_name": gn_result["matchedCanonicalFull"],
-                "authorship": find_authorship(
-                    gn_result["matchedName"],
-                    gn_result["matchedCanonicalFull"]),
-                "rank": gn_result["classificationRanks"].split("|")[-1],
-                "rank_order": gn_result["classificationRanks"].count("|") + 1,
-                "classification_srids":
-                    gn_result["classificationIds"].split("|"),
-                "valid": is_valid,
-                "valid_srid": gn_result["currentRecordId"],
-                "match_type": gn_result["matchType"].lower()
-            })
-        for rank_order, taxa_attributes in enumerate(zip(
-            gn_result["classificationPath"].split("|"),
-            gn_result["classificationRanks"].split("|"),
-            gn_result["classificationIds"].split("|"))
-        ):
-            taxa, rank, srid = taxa_attributes
-            match_type = None
-            if rank == gn_result["classificationRanks"].split("|")[-1]:
-                valid_authorship = find_authorship(
-                    gn_result["matchedName"],
-                    gn_result["matchedCanonicalFull"])
-                if is_valid:
-                    match_type = gn_result["matchType"].lower()
-            else:
-                valid_authorship = None
-            out.append(
-                {
-                    "source_id": gn_result["dataSourceId"],
-                    "source_record_id": srid,
-                    "source_name": gn_result["dataSourceTitleShort"],
-                    "scientific_name": taxa,
-                    "authorship": valid_authorship,
-                    "rank": rank,
-                    "rank_order": rank_order,
-                    "classification_srids":
-                        gn_result["classificationIds"].split("|")[:rank_order + 1],
-                    "valid": True,
-                    "valid_srid": srid,
-                    "match_type": match_type
-                }
-            )
-        return out
-
-    
-    host = "https://verifier.globalnames.org"
-    path_prefix = "api/v1/verifications"
-    if isinstance(name_authorship, str) and name_authorship.strip():
-        path_name = quote_plus(" ".join([name, name_authorship]))
-    else:
-        path_name = quote_plus(name)
-    path_name = path_name.lower()
-    params = urlencode(
-        {'pref_sources': "|".join(['%.0f' % v for v in [1, 3, 11, 147]]),
-         'capitalize': "true"}
-    )
-
-    req = Request(
-        url = "/".join([host, path_prefix, path_name]) + "?" + params,
-        headers = {"Content-Type": "application/json"}
-    )
-    try:
-        data = urlopen(req)
-    except HTTPError as e:
-        return e
-    except URLError as e:
-        if hasattr(e, 'reason'):
-            return e.reason
-        elif hasattr(e, 'code'):
-            return e.code
-        else:
-            return e
-    else:
-        try:
-            out = json.loads(data.read().decode('utf-8'))
-            out = [taxa_ref for species in out
-                for rec in species['preferredResults']
-                for taxa_ref in to_taxa_ref(rec)]
-            return out
-        except KeyError:
-            return [None]
-
+from bdqc_taxa.bdqc_taxa.taxa_ref import TaxaRef
+out = TaxaRef.from_global_names(name, name_authorship)
+return out
 $function$;
 
 -- TEST get_taxa_ref_gnames
@@ -283,6 +182,8 @@ END;
 $BODY$
 LANGUAGE 'plpgsql';
 
+ALTER TABLE public.observations ADD COLUMN id_taxa_obs integer;
+
 
 -- CREATE the trigger for taxa_ref insertion:
 
@@ -369,10 +270,3 @@ $$ LANGUAGE sql;
 -- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer nigrum');
 -- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer');
 -- INSERT INTO public.taxa_obs (scientific_name) VALUES ('Acer rubrum');
-
-
-
--- TODO: Elegantly crashes when no `get_taxa_ref_gnames` finds nothing
--- TODO: See how to make it work with funky caps
--- TODO: Fuzzy match without gnames API (?)
--- TODO: BUG Request 
