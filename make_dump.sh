@@ -1,6 +1,10 @@
 export PGDATABASE="atlas"
 
 out_file="atlas.sql"
+<<<<<<< HEAD
+=======
+obs_file="copy_test_observations.sql"
+>>>>>>> 6e518522b122d42113f04386e97afdd3c617af1d
 
 # Dump users and roles
 pg_dumpall --roles-only  > $out_file
