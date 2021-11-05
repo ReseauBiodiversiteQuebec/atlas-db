@@ -182,7 +182,11 @@ END;
 $BODY$
 LANGUAGE 'plpgsql';
 
+-- CREATE the column `id_taxa_obs` in table observations
+
 ALTER TABLE public.observations ADD COLUMN id_taxa_obs integer;
+CREATE INDEX if not exists observations_id_taxa_obs_idx
+   ON public.observations (id_taxa_obs);
 
 
 -- CREATE the trigger for taxa_ref insertion:
