@@ -233,6 +233,23 @@ RETURNS SETOF public.taxa_obs AS $$
     WHERE source_ref.valid AND source_ref.match_type is not null;
 $$ LANGUAGE sql;
 
+--Procedures MATCHING OF SCIENTIFIC NAME
+DROP FUNCTION IF EXISTS get_taxa_taxa_ref_from_name(text);
+CREATE FUNCTION get_taxa_taxa_ref_from_name(
+    name text)
+RETURNS SETOF public.taxa_ref AS $$
+    select distinct obs_taxa_ref.*
+    from taxa_obs_ref_lookup parent_lookup
+    left join taxa_ref parent_taxa_ref on parent_lookup.id_taxa_ref = parent_taxa_ref.id
+    right join taxa_obs_ref_lookup obs_lookup
+        on parent_lookup.id_taxa_obs = obs_lookup.id_taxa_obs
+    left join taxa_obs_ref_lookup ref_lookup
+        on obs_lookup.id_taxa_ref_valid = ref_lookup.id_taxa_ref_valid
+    left join taxa_ref obs_taxa_ref on ref_lookup.id_taxa_ref = obs_taxa_ref.id
+    where parent_taxa_ref.scientific_name = name and
+        obs_lookup.match_type is not null
+$$ LANGUAGE sql;
+
 -- Get taxa_obs ref
 CREATE OR REPLACE VIEW observations_taxa_ref AS
     SELECT obs.*, lookup.id_taxa_ref_valid
