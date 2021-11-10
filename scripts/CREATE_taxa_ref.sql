@@ -1,15 +1,6 @@
 -- INSTALL python PL EXTENSION TO SUPPORT API CALL
 CREATE EXTENSION IF NOT EXISTS plpython3u;
 
--- DO
--- $$
--- import subprocess
--- BDQC_TAXA_REPO = 'https://github.com/ReseauBiodiversiteQuebec/bdqc_taxa'
--- package_path = str(Path(subprocess.__file__).parent)
--- subprocess.run(['git', 'clone', 'BDQC_TAXA_REPO'])
--- subprocess.run(['python3', 'bdqc_taxa/setup.py', 'install'])
--- $$ LANGUAGE plpython3u;
-
 -- CREATE FUNCTION TO ACCESS REFERENCE TAXA FROM GLOBAL NAMES
 DROP FUNCTION IF EXISTS public.get_taxa_ref_gnames(text, text);
 CREATE FUNCTION public.get_taxa_ref_gnames(
@@ -30,7 +21,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpython3u
 AS $function$
-from bdqc_taxa.bdqc_taxa.taxa_ref import TaxaRef
+from bdqc_taxa.taxa_ref import TaxaRef
 out = TaxaRef.from_global_names(name, name_authorship)
 return out
 $function$;
@@ -71,6 +62,9 @@ CREATE TABLE IF NOT EXISTS public.taxa_ref (
 );
 CREATE INDEX IF NOT EXISTS source_id_srid_idx
   ON public.taxa_ref (source_id, valid_srid);
+
+CREATE INDEX IF NOT EXISTS scientific_name_idx
+  ON public.taxa_ref (scientific_name);
 
 DROP TRIGGER IF EXISTS update_modified_at ON public.taxa_ref;
 CREATE TRIGGER update_modified_at
@@ -233,22 +227,41 @@ RETURNS SETOF public.taxa_obs AS $$
     WHERE source_ref.valid AND source_ref.match_type is not null;
 $$ LANGUAGE sql;
 
+--Procedure Return same level or children synonyms taxa_ref
+DROP FUNCTION IF EXISTS get_taxa_ref_relatives(integer);
+
+CREATE FUNCTION get_taxa_ref_relatives(
+    searched_id_taxa_ref integer)
+RETURNS SETOF public.taxa_ref AS $$
+    select distinct r_ref.*
+    from taxa_obs_ref_lookup s_lookup
+    left join taxa_obs_ref_lookup r_lookup
+        on s_lookup.id_taxa_obs = r_lookup.id_taxa_obs
+    left join taxa_ref r_ref
+        on r_lookup.id_taxa_ref = r_ref.id
+    where s_lookup.id_taxa_ref = searched_id_taxa_ref;
+$$ LANGUAGE sql;
+
+-- SELECT * FROM get_taxa_ref_relatives(32);
+
+
 --Procedures MATCHING OF SCIENTIFIC NAME
-DROP FUNCTION IF EXISTS get_taxa_taxa_ref_from_name(text);
-CREATE FUNCTION get_taxa_taxa_ref_from_name(
+DROP FUNCTION IF EXISTS match_taxa_ref_relatives(text);
+CREATE FUNCTION match_taxa_ref_relatives(
     name text)
 RETURNS SETOF public.taxa_ref AS $$
-    select distinct obs_taxa_ref.*
-    from taxa_obs_ref_lookup parent_lookup
-    left join taxa_ref parent_taxa_ref on parent_lookup.id_taxa_ref = parent_taxa_ref.id
-    right join taxa_obs_ref_lookup obs_lookup
-        on parent_lookup.id_taxa_obs = obs_lookup.id_taxa_obs
-    left join taxa_obs_ref_lookup ref_lookup
-        on obs_lookup.id_taxa_ref_valid = ref_lookup.id_taxa_ref_valid
-    left join taxa_ref obs_taxa_ref on ref_lookup.id_taxa_ref = obs_taxa_ref.id
-    where parent_taxa_ref.scientific_name = name and
-        obs_lookup.match_type is not null
+    select distinct r_ref.*
+    from taxa_ref s_ref
+    left join taxa_obs_ref_lookup s_lookup
+        on s_ref.id = s_lookup.id_taxa_ref
+    left join taxa_obs_ref_lookup r_lookup
+        on s_lookup.id_taxa_obs = r_lookup.id_taxa_obs
+    left join taxa_ref r_ref
+        on r_lookup.id_taxa_ref = r_ref.id
+    where s_ref.scientific_name = name;
 $$ LANGUAGE sql;
+
+-- SELECT * FROM match_taxa_ref_relatives('Aves');
 
 -- Get taxa_obs ref
 CREATE OR REPLACE VIEW observations_taxa_ref AS
