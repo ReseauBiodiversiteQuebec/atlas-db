@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 -- ALTER TABLE public.observations ADD COLUMN id_taxa_obs integer;
+=======
+>>>>>>> f799c201b381aea94e26d35bd764b35b83609d10
 
 DO language 'plpgsql'
 $$

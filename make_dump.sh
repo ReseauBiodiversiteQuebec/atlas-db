@@ -1,6 +1,6 @@
-export PGDATABASE="pose_dev"
+export PGDATABASE="atlas"
 
-out_file="pose_dev.sql"
+out_file="atlas.sql"
 
 # Dump users and roles
 pg_dumpall --roles-only  > $out_file

@@ -5,8 +5,8 @@ DROP INDEX if exists public.observations_geom_year_month_day_idx;
 
 -- Observations indexing for faster join / materialized views
 
-CREATE INDEX if not exists observations_id_taxa_idx
-   ON public.observations (id_taxa);
+CREATE INDEX if not exists observations_id_taxa_obs_idx
+   ON public.observations (id_taxa_obs);
 
 CREATE INDEX if not exists observations_geom_date_time_idx
    ON public.observations (geom, year_obs, month_obs, day_obs, time_obs);
@@ -17,7 +17,9 @@ DROP MATERIALIZED VIEW IF EXISTS api.bird_sampling_points CASCADE;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS api.bird_sampling_points AS
 select
-	row_number() over( order by pts.geom, pts.year_obs, pts.month_obs, pts.day_obs, pts.time_obs ) as id,
+	row_number() over (
+		order by pts.geom, pts.year_obs, pts.month_obs,
+			pts.day_obs, pts.time_obs ) as id,
     pts.geom,
 	pts.year_obs,
 	pts.month_obs,
