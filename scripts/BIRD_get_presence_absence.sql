@@ -20,6 +20,12 @@ returns table (
 )
 as $$
 with 
+	taxa_lookup as (
+		select distinct on (id_taxa_obs)
+		id_taxa_obs, id_taxa_ref_valid
+		from taxa_obs_ref_lookup
+		where id_taxa_ref = taxa_ref_key
+	),
 	sampling_pts as (
 		select *
 		from api.bird_sampling_points
@@ -27,11 +33,14 @@ with
         limit (page_limit) offset (page_offset)
 		),
 	pts_lookup as (
-		select *
-		from api.bird_sampling_observations_lookup
-		where id_taxa_ref = taxa_ref_key
+		select
+			lookup.*, 
+			taxa_lookup.id_taxa_ref_valid
+		from taxa_lookup
+		left join api.bird_sampling_observations_lookup lookup
+			on taxa_lookup.id_taxa_obs = lookup.id_taxa_obs
 	)
-select distinct on (pts_lookup.id_taxa_ref, pts.id)
+select distinct on (pts_lookup.id_taxa_ref_valid, pts.id)
 	public.st_asewkt(
 		pts.geom
 	) as geom,
@@ -41,7 +50,7 @@ select distinct on (pts_lookup.id_taxa_ref, pts.id)
 	pts.time_obs,
 	pts_lookup.id_datasets as dataset_id,
 	ds.title as dataset_name,
-	pts_lookup.id_taxa_ref as taxa_ref_id,
+	pts_lookup.id_taxa_ref_valid as taxa_ref_id,
     taxa_ref.scientific_name as taxa_scientific_name,
 	(CASE WHEN pts_lookup.id_observations IS NULL THEN
 		FALSE
@@ -50,7 +59,7 @@ select distinct on (pts_lookup.id_taxa_ref, pts.id)
 	END) AS occurrence
 from pts_lookup
 left join datasets ds on pts_lookup.id_datasets = ds.id
-left join taxa_ref on pts_lookup.id_taxa_ref = taxa_ref.id
+left join taxa_ref on pts_lookup.id_taxa_ref_valid = taxa_ref.id
 right join sampling_pts pts
 	on pts_lookup.id_sampling_points = pts.id
 $$ LANGUAGE SQL STABLE;
