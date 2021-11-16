@@ -21,10 +21,19 @@ returns table (
 as $$
 with 
 	taxa_lookup as (
-		select distinct on (id_taxa_obs)
-		id_taxa_obs, id_taxa_ref_valid
-		from taxa_obs_ref_lookup
-		where id_taxa_ref = taxa_ref_key
+		select distinct on (f_lookup.id_taxa_obs)
+			f_lookup.id_taxa_obs,
+			f_ref.id taxa_ref_id,
+			f_ref.scientific_name taxa_scientific_name
+		from taxa_obs_ref_lookup s_lookup
+		left join taxa_obs_ref_lookup pivot_lookup
+			on s_lookup.id_taxa_obs = pivot_lookup.id_taxa_obs
+		left join taxa_obs_ref_lookup f_lookup
+			on pivot_lookup.id_taxa_ref_valid = f_lookup.id_taxa_ref
+		left join taxa_ref f_ref
+			on f_lookup.id_taxa_ref_valid = f_ref.id
+		where s_lookup.id_taxa_ref = taxa_ref_key
+			and pivot_lookup.match_type is not null
 	),
 	sampling_pts as (
 		select *
@@ -33,14 +42,15 @@ with
         limit (page_limit) offset (page_offset)
 		),
 	pts_lookup as (
-		select
+		select distinct on (lookup.id_sampling_points)
 			lookup.*, 
-			taxa_lookup.id_taxa_ref_valid
+			taxa_lookup.taxa_ref_id,
+			taxa_lookup.taxa_scientific_name
 		from taxa_lookup
 		left join api.bird_sampling_observations_lookup lookup
 			on taxa_lookup.id_taxa_obs = lookup.id_taxa_obs
 	)
-select distinct on (pts_lookup.id_taxa_ref_valid, pts.id)
+select
 	public.st_asewkt(
 		pts.geom
 	) as geom,
@@ -49,9 +59,9 @@ select distinct on (pts_lookup.id_taxa_ref_valid, pts.id)
 	pts.day_obs,
 	pts.time_obs,
 	pts_lookup.id_datasets as dataset_id,
-	ds.title as dataset_name,
-	pts_lookup.id_taxa_ref_valid as taxa_ref_id,
-    taxa_ref.scientific_name as taxa_scientific_name,
+	ds.title as dataset_title,
+	pts_lookup.taxa_ref_id,
+    pts_lookup.taxa_scientific_name,
 	(CASE WHEN pts_lookup.id_observations IS NULL THEN
 		FALSE
 	ELSE
@@ -59,7 +69,6 @@ select distinct on (pts_lookup.id_taxa_ref_valid, pts.id)
 	END) AS occurrence
 from pts_lookup
 left join datasets ds on pts_lookup.id_datasets = ds.id
-left join taxa_ref on pts_lookup.id_taxa_ref_valid = taxa_ref.id
 right join sampling_pts pts
 	on pts_lookup.id_sampling_points = pts.id
 $$ LANGUAGE SQL STABLE;
