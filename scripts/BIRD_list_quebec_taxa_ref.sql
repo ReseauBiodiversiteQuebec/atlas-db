@@ -2,7 +2,7 @@ drop materialized view if exists api.bird_quebec_taxa_ref cascade;
 
 create materialized view if not exists api.bird_quebec_taxa_ref as
 with extent as (
-	SELECT ST_POLYGON (
+	SELECT public.st_polygon(
 	'LINESTRING(-79.8 62.56,-57.1 62.56,-57.1 45, -79.8 45, -79.8 62.56)',
 	4326)
 )
@@ -17,4 +17,4 @@ left join taxa_obs_ref_lookup r_lookup
 left join taxa_ref r_ref
 	on r_lookup.id_taxa_ref = r_ref.id
 where s_ref.scientific_name = 'Aves'
-	and ST_CONTAINS((SELECT * FROM extent), obs.geom)
+	and public.st_contains((SELECT * FROM extent), obs.geom)
