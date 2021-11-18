@@ -2,8 +2,8 @@
 CREATE EXTENSION IF NOT EXISTS plpython3u;
 
 -- CREATE FUNCTION TO ACCESS REFERENCE TAXA FROM GLOBAL NAMES
-DROP FUNCTION IF EXISTS public.get_taxa_ref_gnames(text, text);
-CREATE FUNCTION public.get_taxa_ref_gnames(
+DROP FUNCTION IF EXISTS public.match_taxa_sources(text, text);
+CREATE FUNCTION public.match_taxa_sources(
     name text,
     name_authorship text DEFAULT NULL)
 RETURNS TABLE (
@@ -17,18 +17,19 @@ RETURNS TABLE (
     valid boolean,
     valid_srid text,
     classification_srids text[],
-    match_type text
+    match_type text,
+    is_parent boolean
 )
 LANGUAGE plpython3u
 AS $function$
 from bdqc_taxa.taxa_ref import TaxaRef
-out = TaxaRef.from_global_names(name, name_authorship)
+out = TaxaRef.from_all_sources(name, name_authorship)
 return out
 $function$;
 
--- TEST get_taxa_ref_gnames
--- SELECT * FROM public.get_taxa_ref_gnames('Cyanocitta cristata');
--- SELECT * FROM public.get_taxa_ref_gnames('Antigone canadensis');
+-- TEST match_taxa_sources
+-- SELECT * FROM public.match_taxa_sources('Cyanocitta cristata');
+-- SELECT * FROM public.match_taxa_sources('Antigone canadensis');
 
 
 -- TODO verify what function was created and reuse it
@@ -97,6 +98,7 @@ CREATE TABLE IF NOT EXISTS public.taxa_obs_ref_lookup (
     id_taxa_ref integer NOT NULL,
     id_taxa_ref_valid integer NOT NULL,
     match_type text,
+    is_parent boolean,
     UNIQUE (id_taxa_obs, id_taxa_ref)
 );
 
@@ -123,7 +125,7 @@ BEGIN
     DROP TABLE IF EXISTS temp_src_taxa_ref;
     CREATE TEMPORARY TABLE temp_src_taxa_ref AS (
         SELECT source_ref.*, taxa_ref.id id_taxa_ref
-        FROM get_taxa_ref_gnames(new_scientific_name, new_authorship) source_ref
+        FROM match_taxa_sources(new_scientific_name, new_authorship) source_ref
         LEFT JOIN public.taxa_ref taxa_ref
             ON source_ref.source_id = taxa_ref.source_id
             AND source_ref.source_record_id = taxa_ref.source_record_id
@@ -162,12 +164,13 @@ BEGIN
             AND temp_src_taxa_ref.source_record_id = ins_ref.source_record_id;
 
     INSERT INTO public.taxa_obs_ref_lookup (
-            id_taxa_obs, id_taxa_ref, id_taxa_ref_valid, match_type)
+            id_taxa_obs, id_taxa_ref, id_taxa_ref_valid, match_type, is_parent)
         SELECT
             new_id AS id_taxa_obs,
             src_ref.id_taxa_ref AS id_taxa_ref,
             _id_join.id_taxa_ref AS id_taxa_ref_valid,
-            src_ref.match_type AS match_type
+            src_ref.match_type AS match_type, 
+            src_ref.is_parent AS is_parent
         FROM temp_src_taxa_ref src_ref
         LEFT JOIN temp_src_taxa_ref _id_join
             ON src_ref.valid_srid = _id_join.source_record_id
@@ -216,7 +219,7 @@ CREATE FUNCTION get_taxa_obs_from_name(
     authorship text DEFAULT NULL)
 RETURNS SETOF public.taxa_obs AS $$
     SELECT DISTINCT(taxa_obs.*)
-    FROM get_taxa_ref_gnames(scientific_name, authorship) source_ref
+    FROM match_taxa_sources(scientific_name, authorship) source_ref
     LEFT JOIN public.taxa_ref taxa_ref
         ON source_ref.source_id = taxa_ref.source_id
         AND source_ref.valid_srid = taxa_ref.valid_srid
