@@ -1,10 +1,8 @@
 -- Create function to generate occurences (true/false) for birds FOR EXHAUSTIVES DATASETS ONLY
 
-drop function if exists api.get_bird_presence_absence(integer, integer, integer) cascade;
-create function api.get_bird_presence_absence (
-	taxa_ref_key integer,
-    page_limit integer DEFAULT NULL,
-    page_offset integer DEFAULT NULL
+drop function if exists api.get_mtl_bird_presence_absence(integer) cascade;
+create function api.get_mtl_bird_presence_absence (
+	taxa_ref_key integer
 )
 returns table (
 	geom text,
@@ -34,9 +32,10 @@ with
 	sampling_pts as (
 		select *
 		from api.bird_sampling_points
-		order by id
-        limit (page_limit) offset (page_offset)
-		),
+		where public.st_within (geom , (
+			select public.ST_UNION (wkb_geometry)
+			from montreal_terrestrial_limits))
+	),
 	pts_lookup as (
 		select distinct on (lookup.id_sampling_points)
 			lookup.*, 
@@ -68,5 +67,3 @@ left join datasets ds on pts_lookup.id_datasets = ds.id
 right join sampling_pts pts
 	on pts_lookup.id_sampling_points = pts.id
 $$ LANGUAGE SQL STABLE;
-
-explain analyze select * from api.get_bird_presence_absence(10609)
