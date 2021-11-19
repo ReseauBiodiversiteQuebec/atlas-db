@@ -19,15 +19,16 @@ returns table (
 as $$
 with 
 	taxa_lookup as (
-		select distinct on (f_lookup.taxa_obs_id)
-			f_lookup.taxa_obs_id,
+		select distinct on (obs_lookup.id_taxa_obs)
+			obs_lookup.id_taxa_obs,
 			f_ref.id taxa_ref_id,
 			f_ref.scientific_name taxa_scientific_name
-		from taxa_ref_synonym f_lookup
+		from taxa_obs_ref_lookup ref_lookup
 		left join taxa_ref f_ref
-			on f_lookup.taxa_ref_synonym_id = f_ref.id
-		where f_lookup.taxa_ref_id = taxa_ref_key
-			and f_ref.valid
+			on ref_lookup.id_taxa_ref_valid = f_ref.id
+		left join taxa_obs_ref_lookup obs_lookup
+			on ref_lookup.id_taxa_ref_valid = obs_lookup.id_taxa_ref_valid
+		where ref_lookup.id_taxa_ref = taxa_ref_key
 	),
 	sampling_pts as (
 		select *
@@ -43,7 +44,7 @@ with
 			taxa_lookup.taxa_scientific_name
 		from taxa_lookup
 		left join api.bird_sampling_observations_lookup lookup
-			on taxa_lookup.taxa_obs_id = lookup.id_taxa_obs
+			on taxa_lookup.id_taxa_obs = lookup.id_taxa_obs
 	)
 select
 	public.st_asewkt(

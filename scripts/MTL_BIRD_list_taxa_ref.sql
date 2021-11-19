@@ -11,16 +11,12 @@ CREATE MATERIALIZED VIEW if not exists api.bird_mtl_taxa_ref AS (
                 on pts.id = pts_lookup.id_sampling_points
             left join taxa_obs_ref_lookup ref_lookup
                 on pts_lookup.id_taxa_obs = ref_lookup.id_taxa_obs
-            left join taxa_ref_synonym taxa_lookup
-                on ref_lookup.id_taxa_ref_valid = taxa_lookup.taxa_ref_id
             left join taxa_ref
-                on taxa_lookup.taxa_ref_synonym_id = taxa_ref.id
+                on ref_lookup.id_taxa_ref_valid = taxa_ref.id
             where st_within(pts.geom, (
                     select public.ST_UNION (wkb_geometry)
                     from montreal_terrestrial_limits))
-                and ref_lookup.match_type is not null
-                and taxa_ref.valid
-            order by taxa_ref.source_id
+            order by pts.id, taxa_ref.id, taxa_ref.source_id
         ),
         yearly_count as (
             select
