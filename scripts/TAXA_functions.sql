@@ -15,8 +15,10 @@ RETURNS SETOF taxa_obs AS $$
     from taxa_ref search_ref
     left join taxa_obs_ref_lookup search_lookup
         on search_ref.id = search_lookup.id_taxa_ref
+    left join taxa_obs_ref_lookup synonym_lookup
+        on search_lookup.id_taxa_ref_valid = synonym_lookup.id_taxa_ref_valid
     left join taxa_obs
-        on search_lookup.id_taxa_obs = taxa_obs.id
+	    on synonym_lookup.id_taxa_obs = taxa_obs.id
     where search_ref.scientific_name = taxa_name
 $$ LANGUAGE sql;
 
@@ -29,7 +31,7 @@ RETURNS SETOF public.taxa_ref AS $$
     left join taxa_obs_ref_lookup search_lookup
         on search_ref.id = search_lookup.id_taxa_ref
     left join taxa_obs_ref_lookup synonym_lookup
-        on search_lookup.id_taxa_obs = synonym_lookup.id_taxa_obs
+        on search_lookup.id_taxa_ref_valid = synonym_lookup.id_taxa_ref_valid
     left join taxa_ref
         on synonym_lookup.id_taxa_ref = taxa_ref.id
     where search_ref.scientific_name = taxa_name
