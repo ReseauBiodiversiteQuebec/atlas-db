@@ -1,8 +1,8 @@
 -- Create function to generate occurences (true/false) for birds FOR EXHAUSTIVES DATASETS ONLY
 
-drop function if exists api.get_mtl_bird_presence_absence(integer) cascade;
+drop function if exists api.get_mtl_bird_presence_absence(text) cascade;
 create function api.get_mtl_bird_presence_absence (
-	taxa_ref_key integer
+	taxa_name text
 )
 returns table (
 	geom text,
@@ -19,16 +19,16 @@ returns table (
 as $$
 with 
 	taxa_lookup as (
-		select distinct on (obs_lookup.id_taxa_obs)
-			obs_lookup.id_taxa_obs,
-			f_ref.id taxa_ref_id,
-			f_ref.scientific_name taxa_scientific_name
-		from taxa_obs_ref_lookup ref_lookup
-		left join taxa_ref f_ref
-			on ref_lookup.id_taxa_ref_valid = f_ref.id
-		left join taxa_obs_ref_lookup obs_lookup
-			on ref_lookup.id_taxa_ref_valid = obs_lookup.id_taxa_ref_valid
-		where ref_lookup.id_taxa_ref = taxa_ref_key
+		select distinct on (ref_lookup.id_taxa_obs)
+			ref_lookup.id_taxa_obs,
+			taxa_ref.id taxa_ref_id,
+			taxa_ref.scientific_name taxa_scientific_name
+		from match_taxa_obs(taxa_name) taxa_obs
+		left join taxa_obs_ref_lookup ref_lookup
+			on taxa_obs.id = ref_lookup.id_taxa_obs
+		left join taxa_ref
+			on ref_lookup.id_taxa_ref_valid = taxa_ref.id
+		where ref_lookup.match_type is not NULL
 	),
 	sampling_pts as (
 		select *
