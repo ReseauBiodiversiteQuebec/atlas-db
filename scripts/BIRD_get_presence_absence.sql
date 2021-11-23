@@ -1,8 +1,8 @@
 -- Create function to generate occurences (true/false) for birds FOR EXHAUSTIVES DATASETS ONLY
 
-drop function if exists api.get_bird_presence_absence(integer, integer, integer) cascade;
+drop function if exists api.get_bird_presence_absence(text, integer, integer) cascade;
 create function api.get_bird_presence_absence (
-	taxa_ref_key integer,
+	taxa_name text,
     page_limit integer DEFAULT NULL,
     page_offset integer DEFAULT NULL
 )
@@ -21,15 +21,16 @@ returns table (
 as $$
 with 
 	taxa_lookup as (
-		select distinct on (f_lookup.taxa_obs_id)
-			f_lookup.taxa_obs_id,
-			f_ref.id taxa_ref_id,
-			f_ref.scientific_name taxa_scientific_name
-		from taxa_ref_synonym f_lookup
-		left join taxa_ref f_ref
-			on f_lookup.taxa_ref_synonym_id = f_ref.id
-		where f_lookup.taxa_ref_id = taxa_ref_key
-			and f_ref.valid
+		select distinct on (ref_lookup.id_taxa_obs)
+			ref_lookup.id_taxa_obs,
+			taxa_ref.id taxa_ref_id,
+			taxa_ref.scientific_name taxa_scientific_name
+		from match_taxa_obs(taxa_name) taxa_obs
+		left join taxa_obs_ref_lookup ref_lookup
+			on taxa_obs.id = ref_lookup.id_taxa_obs
+		left join taxa_ref
+			on ref_lookup.id_taxa_ref_valid = taxa_ref.id
+		where ref_lookup.match_type is not NULL
 	),
 	sampling_pts as (
 		select *
@@ -44,7 +45,7 @@ with
 			taxa_lookup.taxa_scientific_name
 		from taxa_lookup
 		left join api.bird_sampling_observations_lookup lookup
-			on taxa_lookup.taxa_obs_id = lookup.id_taxa_obs
+			on taxa_lookup.id_taxa_obs = lookup.id_taxa_obs
 	)
 select
 	public.st_asewkt(
@@ -69,4 +70,4 @@ right join sampling_pts pts
 	on pts_lookup.id_sampling_points = pts.id
 $$ LANGUAGE SQL STABLE;
 
-explain analyze select * from api.get_bird_presence_absence(10609)
+explain analyze select * from api.get_bird_presence_absence('Leuconotopicus villosus')
