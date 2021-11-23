@@ -1,32 +1,34 @@
 DO language 'plpgsql'
 $$
-DECLARE
-    r record;
-    iterator integer := 0;
-    total integer := (select count(id) from taxa WHERE scientific_name not in (select scientific_name from taxa_obs));
 BEGIN
     RAISE NOTICE '%', NOW();
-    FOR r IN 
+    CREATE TEMPORARY TABLE taxa_taxa_obs_lookup (
+        id_taxa integer,
+        id_taxa_obs integer
+    );
+    with r as ( 
         SELECT id, scientific_name, rank, authorship
         FROM public.taxa
         WHERE scientific_name not in (select scientific_name from taxa_obs)
-    LOOP
-        BEGIN
-            iterator := iterator + 1;
-            RAISE NOTICE 'inserting record % / %', iterator, total;
-            WITH ins_taxa AS (
-                INSERT INTO public.taxa_obs (scientific_name, rank, authorship)
-                VALUES (r.scientific_name, r.rank, r.authorship)
-                RETURNING id)
-            UPDATE public.observations
-            SET id_taxa_obs = ins_taxa.id
-            FROM ins_taxa
-            WHERE id_taxa = r.id;
-            EXCEPTION WHEN OTHERS THEN
-                raise notice 'Failed for taxa %', r.scientific_name;
-                raise notice '% %', SQLERRM, SQLSTATE;
-            COMMIT;
-        END;
-    END LOOP;
-    RAISE NOTICE '%', NOW();
+        )
+    INSERT INTO public.taxa_obs (scientific_name, rank, authorship)
+    select r.scientific_name, r.rank, r.authorship
+    FROM r;
+    RAISE NOTICE 'Completed insertion %', NOW();
+    
+    with taxa_obs_lookup as (
+	select
+		taxa.id as id_taxa,
+		taxa_obs.id as id_taxa_obs
+	from taxa
+	left join taxa_obs
+		on taxa.scientific_name = taxa_obs.scientific_name
+		and taxa.authorship = taxa_obs.authorship
+		and taxa.rank::text = taxa_obs.rank::text
+)
+    update observations obs
+    set id_taxa_obs = taxa_obs_lookup.id_taxa_obs
+    from taxa_obs_lookup
+    where obs.id_taxa = taxa_obs_lookup.id_taxa;
+    RAISE NOTICE 'Completed observations update %', NOW();
 END$$;
