@@ -1,7 +1,7 @@
 -- Clean previous taxa_functions
 DROP FUNCTION IF EXISTS get_taxa_obs_from_name(text, text);
 DROP FUNCTION IF EXISTS get_taxa_ref_relatives(integer);
-DROP VIEW IF EXISTS observations_taxa_ref;
+DROP VIEW IF EXISTS observations_taxa_ref CASCADE;
 DROP FUNCTION IF EXISTS get_observation_from_taxa(text, text);
 
 
@@ -44,9 +44,8 @@ CREATE FUNCTION filter_observations_from_taxa_match(
     name text)
 RETURNS SETOF observations AS $$
     SELECT obs.*
-    FROM match_taxa_obs(name) taxa_obs
-    LEFT JOIN public.observations obs
-        ON taxa_obs.id = obs.id_taxa_obs
+    FROM observations obs
+    WHERE obs.id_taxa_obs in (select id from match_taxa_obs(name))
 $$ LANGUAGE sql;
 
 -- List observed taxa

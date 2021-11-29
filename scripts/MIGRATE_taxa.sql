@@ -2,10 +2,6 @@ DO language 'plpgsql'
 $$
 BEGIN
     RAISE NOTICE '%', NOW();
-    CREATE TEMPORARY TABLE taxa_taxa_obs_lookup (
-        id_taxa integer,
-        id_taxa_obs integer
-    );
     with r as ( 
         SELECT id, scientific_name, rank, authorship
         FROM public.taxa
@@ -17,15 +13,15 @@ BEGIN
     RAISE NOTICE 'Completed insertion %', NOW();
     
     with taxa_obs_lookup as (
-	select
-		taxa.id as id_taxa,
-		taxa_obs.id as id_taxa_obs
-	from taxa
-	left join taxa_obs
-		on taxa.scientific_name = taxa_obs.scientific_name
-		and taxa.authorship = taxa_obs.authorship
-		and taxa.rank::text = taxa_obs.rank::text
-)
+        select
+            taxa.id as id_taxa,
+            taxa_obs.id as id_taxa_obs
+        from taxa
+        left join taxa_obs
+            on taxa.scientific_name = taxa_obs.scientific_name
+            and taxa.authorship = taxa_obs.authorship
+            and taxa.rank::text = taxa_obs.rank::text
+        )
     update observations obs
     set id_taxa_obs = taxa_obs_lookup.id_taxa_obs
     from taxa_obs_lookup
