@@ -42,9 +42,10 @@ with
 			lookup.*, 
 			taxa_lookup.taxa_ref_id,
 			taxa_lookup.taxa_scientific_name
-		from taxa_lookup
-		left join api.bird_sampling_observations_lookup lookup
-			on taxa_lookup.id_taxa_obs = lookup.id_taxa_obs
+		from api.bird_sampling_observations_lookup lookup
+		join taxa_lookup
+			on lookup.id_taxa_obs = taxa_lookup.id_taxa_obs
+		where lookup.id_sampling_points in (select id from sampling_pts)
 	)
 select
 	public.st_asewkt(

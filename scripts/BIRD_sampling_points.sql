@@ -48,3 +48,7 @@ CREATE INDEX if not exists bird_sampling_points_id_idx
 CREATE INDEX if not exists bird_sampling_points_points_geom_date_time_idx
     ON api.bird_sampling_points (geom, year_obs, month_obs, day_obs, time_obs);
 
+DROP INDEX IF EXISTS bird_sampling_points_geom_idx;
+CREATE INDEX  bird_sampling_points_geom_idx
+  ON api.bird_sampling_points
+  USING GIST (geom);
