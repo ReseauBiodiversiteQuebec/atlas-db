@@ -69,4 +69,12 @@ CREATE VIEW api.taxa AS (
 		on obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
 	ORDER BY obs_ref.id_taxa_obs, obs_ref.valid_scientific_name,
         best_vernacular.vernacular_en NULLS LAST
-)
+);
+
+DROP FUNCTION if exists api.match_taxa CASCADE;
+CREATE FUNCTION api.match_taxa (taxa_name TEXT)
+RETURNS SETOF api.taxa
+AS $$
+SELECT * FROM api.taxa
+WHERE id_taxa_obs IN (select id from public.match_taxa_obs(taxa_name))
+$$ LANGUAGE SQL STABLE;
