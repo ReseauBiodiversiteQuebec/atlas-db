@@ -19,6 +19,7 @@ CREATE TABLE public.taxa_vernacular (
     source_record_id text NOT NULL,
     name text NOT NULL,
     language text NOT NULL,
+    gbif_taxon_key text,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by text NOT NULL DEFAULT CURRENT_USER,
@@ -116,7 +117,8 @@ BEGIN
         select
             match.*,
             gbif_ref.match_type,
-            taxa_vernacular.id as id_taxa_vernacular
+            taxa_vernacular.id as id_taxa_vernacular,
+            gbif_ref.source_record_id as gbif_taxon_key
         from 
             gbif_ref,
             public.taxa_vernacular_from_gbif(gbif_ref.source_record_id) match
@@ -130,12 +132,14 @@ BEGIN
             source_name,
             source_record_id,
             name,
-            language)
+            language,
+            gbif_taxon_key)
         SELECT
             source,
             source_taxon_key,
             name,
-            language
+            language,
+            gbif_taxon_key
         FROM temp_vernacular
         ON CONFLICT DO NOTHING
         RETURNING
@@ -165,4 +169,3 @@ $BODY$
 LANGUAGE 'plpgsql';
 
 select insert_taxa_vernacular_from_obs(2072);
-select * from taxa_vernacular;
