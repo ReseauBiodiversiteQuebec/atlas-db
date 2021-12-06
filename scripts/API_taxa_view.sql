@@ -76,5 +76,30 @@ CREATE FUNCTION api.match_taxa (taxa_name TEXT)
 RETURNS SETOF api.taxa
 AS $$
 SELECT * FROM api.taxa
-WHERE id_taxa_obs IN (select id from public.match_taxa_obs(taxa_name))
+WHERE id_taxa_obs IN (
+	(
+		select id from public.match_taxa_obs(taxa_name)
+	) UNION (
+		SELECT id_taxa_obs
+		from public.taxa_vernacular vern
+		left join taxa_obs_vernacular_lookup
+			on vern.id = taxa_obs_vernacular_lookup.id_taxa_vernacular
+		where vern.name = taxa_name
+	))
 $$ LANGUAGE SQL STABLE;
+
+-- Autocomplete taxa_name
+DROP FUNCTION IF EXISTS api.taxa_autocomplete (text);
+CREATE FUNCTION api.autocomplete_taxa_name(
+    name text)
+RETURNS json AS $$
+    SELECT json_agg(DISTINCT(matched_name))
+    FROM (
+        (
+            select scientific_name matched_name from taxa_ref
+        ) UNION (
+            select name matched_name from taxa_vernacular
+        )
+    ) taxa
+    WHERE LOWER(name) like '%' || LOWER(name)
+$$ LANGUAGE sql STABLE;

@@ -14,7 +14,6 @@ BEGIN
         SELECT id, scientific_name
         from taxa_obs
         where taxa_obs.id not in (select id_taxa_obs from taxa_obs_vernacular_lookup)
-        LIMIT 100
     LOOP
         BEGIN
             iterator := iterator + 1;
