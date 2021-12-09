@@ -55,14 +55,3 @@ CREATE OR REPLACE VIEW list_valid_taxa AS
     LEFT JOIN public.taxa_ref taxa_ref on lookup.id_taxa_ref_valid = taxa_ref.id
     WHERE lookup.match_type is not null;
 
--- Autocomplete taxa_name
-DROP FUNCTION IF EXISTS autocomplete_taxa_name (text);
-CREATE FUNCTION autocomplete_taxa_name(
-    name text)
-RETURNS TABLE (scientific_name text) AS $$
-    SELECT DISTINCT(taxa_ref.scientific_name)
-    FROM taxa_ref
-    WHERE LOWER(scientific_name) like '%' || LOWER(name) || '%'
-$$ LANGUAGE sql;
-
--- select autocomplete_taxa_name('corb');
