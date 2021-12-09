@@ -6,7 +6,7 @@ obs_file="dump_test_observations.sql"
 
 # Dump users and roles
 echo "SET session_replication_role = 'replica';" > $out_file 
-pg_dumpall --roles-only  > $out_file
+pg_dumpall --roles-only >> $out_file
 
 grep -v "CREATE ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 grep -v "ALTER ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
@@ -16,6 +16,7 @@ pg_dump -a \
     -T observations \
     -T obs_efforts \
     -T public_api.hex_250_na \
+    -T public_api.hexquebec      \
     -T public_api.hexquebec100km \
     -T public_api.hexquebec10km  \
     -T public_api.hexquebec20km  \
@@ -28,11 +29,7 @@ echo "SET session_replication_role = 'replica';" > $hex_file
 
 pg_dump -a \
     -t public_api.hex_250_na     \
-    -t public_api.hexquebec100km \
-    -t public_api.hexquebec10km  \
-    -t public_api.hexquebec20km  \
-    -t public_api.hexquebec50km  \
-    -t public_api.hexquebec5km   \
+    -t public_api.hexquebec      \
     >> $hex_file
 
 # Dump selected observations in 'test_observations.txt' file and add line to copy in sql dump
