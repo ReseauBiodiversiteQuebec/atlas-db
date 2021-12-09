@@ -125,7 +125,7 @@ BEGIN
     DROP TABLE IF EXISTS temp_src_taxa_ref;
     CREATE TEMPORARY TABLE temp_src_taxa_ref AS (
         SELECT source_ref.*, taxa_ref.id id_taxa_ref
-        FROM match_taxa_sources(new_scientific_name, new_authorship) source_ref
+        FROM public.match_taxa_sources(new_scientific_name, new_authorship) source_ref
         LEFT JOIN public.taxa_ref taxa_ref
             ON source_ref.source_id = taxa_ref.source_id
             AND source_ref.source_record_id = taxa_ref.source_record_id
@@ -191,7 +191,7 @@ CREATE INDEX if not exists observations_id_taxa_obs_idx
 CREATE OR REPLACE FUNCTION trigger_insert_taxa_ref_from_obs()
 RETURNS TRIGGER AS $$
 BEGIN
-    PERFORM insert_taxa_ref_from_obs(
+    PERFORM public.insert_taxa_ref_from_obs(
         NEW.id, NEW.scientific_name, NEW.authorship
         );
     RETURN NEW;
