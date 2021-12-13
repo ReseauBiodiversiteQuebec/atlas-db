@@ -6,7 +6,7 @@ obs_file="dump_test_observations.sql"
 
 # Dump users and roles
 echo "SET session_replication_role = 'replica';" > $out_file 
-pg_dumpall --roles-only  > $out_file
+pg_dumpall --roles-only >> $out_file
 
 grep -v "CREATE ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 grep -v "ALTER ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
