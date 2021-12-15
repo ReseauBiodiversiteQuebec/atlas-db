@@ -44,7 +44,7 @@ $$ LANGUAGE plpgsql;
 
 -- CREATE `taxa_ref` table and related resources
 
-DROP TABLE IF EXISTS public.taxa_ref CASCADE;
+-- DROP TABLE IF EXISTS public.taxa_ref CASCADE;
 CREATE TABLE IF NOT EXISTS public.taxa_ref (
     id SERIAL PRIMARY KEY,
     source_name text NOT NULL,
@@ -74,7 +74,7 @@ CREATE TRIGGER update_modified_at
 
 
 -- CREATE `taxa_obs` table and related resources
-DROP TABLE IF EXISTS public.taxa_obs CASCADE;
+-- DROP TABLE IF EXISTS public.taxa_obs CASCADE;
 CREATE TABLE IF NOT EXISTS public.taxa_obs (
     id SERIAL PRIMARY KEY,
     scientific_name text NOT NULL,
@@ -92,7 +92,7 @@ CREATE TRIGGER update_modified_at
   EXECUTE PROCEDURE trigger_set_timestamp();
 
 -- CREATE `taxa_obs_ref_lookup` table and related resources
-DROP TABLE IF EXISTS public.taxa_obs_ref_lookup CASCADE;
+-- DROP TABLE IF EXISTS public.taxa_obs_ref_lookup CASCADE;
 CREATE TABLE IF NOT EXISTS public.taxa_obs_ref_lookup (
     id_taxa_obs integer NOT NULL,
     id_taxa_ref integer NOT NULL,
@@ -181,7 +181,7 @@ LANGUAGE 'plpgsql';
 
 -- CREATE the column `id_taxa_obs` in table observations
 
-ALTER TABLE public.observations ADD COLUMN id_taxa_obs integer;
+ALTER TABLE public.observations ADD COLUMN IF NOT EXISTS id_taxa_obs integer;
 CREATE INDEX if not exists observations_id_taxa_obs_idx
    ON public.observations (id_taxa_obs);
 

@@ -11,15 +11,30 @@ CREATE FUNCTION match_taxa_obs(
 	taxa_name text	
 )
 RETURNS SETOF taxa_obs AS $$
+    with match_taxa_obs as (
+        (
+            select ref_lookup.id_taxa_obs as id
+            from taxa_ref
+            left join taxa_obs_ref_lookup ref_lookup
+                on taxa_ref.id = ref_lookup.id_taxa_ref
+            where LOWER(taxa_ref.scientific_name) = LOWER(taxa_name)
+        ) UNION (
+            select vernacular_lookup.id_taxa_obs as id
+            from taxa_vernacular
+            left join taxa_obs_vernacular_lookup vernacular_lookup
+                on taxa_vernacular.id = vernacular_lookup.id_taxa_vernacular
+            where taxa_vernacular.name = INITCAP(taxa_name)
+        )
+    )
     select distinct taxa_obs.*
-    from taxa_ref search_ref
+    from match_taxa_obs
     left join taxa_obs_ref_lookup search_lookup
-        on search_ref.id = search_lookup.id_taxa_ref
+        on match_taxa_obs.id = search_lookup.id_taxa_obs
     left join taxa_obs_ref_lookup synonym_lookup
         on search_lookup.id_taxa_ref_valid = synonym_lookup.id_taxa_ref_valid
     left join taxa_obs
 	    on synonym_lookup.id_taxa_obs = taxa_obs.id
-    where search_ref.scientific_name = taxa_name
+    where search_lookup.match_type is not null;
 $$ LANGUAGE sql;
 
 DROP FUNCTION IF EXISTS match_taxa_ref_relatives(text);
@@ -39,13 +54,14 @@ RETURNS SETOF public.taxa_ref AS $$
 
 -- Filter observations from taxa
 
-DROP FUNCTION IF EXISTS filter_observations_from_taxa_match(text);
-CREATE FUNCTION filter_observations_from_taxa_match(
+DROP FUNCTION IF EXISTS filter_qc_obs_from_taxa_match(text);
+CREATE FUNCTION filter_qc_obs_from_taxa_match(
     name text)
 RETURNS SETOF observations AS $$
     SELECT obs.*
     FROM observations obs
-    WHERE obs.id_taxa_obs in (select id from match_taxa_obs(name))
+    WHERE obs.id_taxa_obs in (select id from match_taxa_obs(name));
+        -- and obs.within_quebec is TRUE;
 $$ LANGUAGE sql;
 
 -- List observed taxa
