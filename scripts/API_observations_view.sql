@@ -24,7 +24,9 @@ CREATE VIEW api.observations AS (
 		obs.id_datasets,
 		ds.title as dataset,
 		ds.original_source as source,
-		obs.org_id_obs as source_record_id
+		obs.org_id_obs as source_record_id,
+		obs.org_parent_event as source_parent_event,
+		obs.org_event as source_event
 	from observations obs
 	left join api.taxa
 		on obs.id_taxa_obs = taxa.id_taxa_obs
