@@ -26,5 +26,5 @@ END;
 $$ language plpgsql;
 
 CREATE TRIGGER observations_set_within_quebec 
-BEFORE INSERT OR UPDATE on public.observations
+BEFORE INSERT on public.observations
 	FOR EACH ROW EXECUTE FUNCTION observations_set_within_quebec_trigger();

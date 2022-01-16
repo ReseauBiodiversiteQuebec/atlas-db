@@ -43,6 +43,8 @@ ADD COLUMN dwc_event_date text NOT NULL DEFAULT '';
 -- 3. Update observations and set value of `dwc_event_date`
 -------------------------------------------------------------------------
 
+-- IMPORTANT :  All triggers must be activated before doing that step
+
 UPDATE public.observations
 SET dwc_event_date = format_dwc_datetime(
 	year_obs,
@@ -64,7 +66,6 @@ WITH kept_obs AS (
 	GROUP BY (geom, dwc_event_date, id_taxa_obs, obs_value, id_variables))
 select obs.id id_obs, obs_efforts.id_efforts
 from observations obs
-left join obs_efforts on obs.id = id_obs
 WHERE obs.id not in ( select id from kept_obs );
 DELETE FROM obs_efforts where id_obs in ( select id_obs from del_obs);
 DELETE FROM observations where id in ( select id_obs from del_obs);
@@ -72,7 +73,8 @@ DELETE FROM efforts where id not in ( select id_efforts from obs_efforts);
 
 ALTER TABLE public.observations
     ADD CONSTRAINT observations_unique_rows
-    UNIQUE (geom, dwc_event_date, id_taxa_obs, id_variables, obs_value);
+    UNIQUE (geom, dwc_event_date,
+		id_taxa_obs, id_variables, obs_value, within_quebec);
 
 
 -------------------------------------------------------------------------
