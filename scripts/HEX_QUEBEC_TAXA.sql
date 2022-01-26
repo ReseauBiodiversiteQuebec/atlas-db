@@ -4,16 +4,13 @@
 DROP MATERIALIZED VIEW IF EXISTS public_api.hexquebec_obs_lookup CASCADE;
 CREATE MATERIALIZED VIEW public_api.hexquebec_obs_lookup
 AS
- WITH h AS (
-         SELECT hexquebec.geom,
-            hexquebec.fid
-           FROM public_api.hexquebec
-        )
- SELECT h.fid,
+ SELECT
+ 	h.fid,
+	h.scale,
     o.id,
     o.id_taxa_obs,
 	o.year_obs
-   FROM h,
+   FROM public_api.hexquebec h,
     observations o
   WHERE o.within_quebec IS TRUE AND st_within(o.geom, h.geom)
 WITH DATA;
@@ -70,7 +67,8 @@ WITH h AS (
 		year_obs,
 		year_obs || ':' || count(id) || ':' || count(id_taxa_obs) as year_counts
 	FROM public_api.hexquebec_obs_lookup
-	WHERE id_taxa_obs = ANY(taxa_keys)
+	WHERE scale = zoom
+		AND id_taxa_obs = ANY(taxa_keys)
 	GROUP BY (fid, year_obs)
 ), fid_agg AS (
 	SELECT
