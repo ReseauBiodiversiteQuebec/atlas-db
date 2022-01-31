@@ -1,3 +1,24 @@
+-- DROP MATERIALIZED VIEW IF EXISTS taxa_obs_quality_metrics CASCADE;
+
+-- CREATE MATERIALIZED VIEW taxa_obs_quality_metrics as
+-- select
+-- 	lookup.id_taxa_obs,
+-- 	count(lookup.id) num_obs,
+-- 	count(distinct(lookup.year_obs)) num_year_obs,
+-- 	min(lookup.year_obs) min_year_obs,
+-- 	max(lookup.year_obs) max_year_obs,
+-- 	count(lookup.id) / count(distinct(lookup.year_obs)) average_number_per_year,
+-- 	count(distinct(lookup.fid)) num_spatial_cell,
+-- 	count(lookup.id) / count(distinct(lookup.fid)) average_number_per_cell,
+-- 	min(h.centroid_y) min_cell_y,
+-- 	max(h.centroid_y) max_cell_y
+-- from
+-- 	public_api.hexquebec_obs_lookup lookup,
+-- 	public_api.hexquebec h
+-- where
+-- 	lookup.scale = h.scale and lookup.fid = h.fid
+-- group by id_taxa_obs;
+
 DROP VIEW if exists api.taxa CASCADE;
 CREATE VIEW api.taxa AS (
 	with obs_ref as (
@@ -59,14 +80,27 @@ CREATE VIEW api.taxa AS (
 		obs_group.group_en,
 		obs_group.group_fr,
 		vernacular_group.vernacular,
-		obs_ref.source_references
-	from obs_ref
-	left join vernacular_group
-		on obs_ref.id_taxa_obs = vernacular_group.id_taxa_obs
-	left join obs_group
-		on obs_ref.id_taxa_obs = obs_group.id_taxa_obs
-	left join best_vernacular
-		on obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
+		obs_ref.source_references,
+		metrics.num_obs,
+		metrics.num_year_obs,
+		metrics.min_year_obs,
+		metrics.max_year_obs,
+		metrics.average_number_per_year,
+		metrics.num_spatial_cell,
+		metrics.average_number_per_cell,
+		metrics.min_cell_y,
+		metrics.max_cell_y
+	from
+		obs_ref,
+		taxa_obs_quality_metrics metrics,
+		vernacular_group,
+		obs_group,
+		best_vernacular
+	where
+		obs_ref.id_taxa_obs = metrics.id_taxa_obs and
+		obs_ref.id_taxa_obs = vernacular_group.id_taxa_obs and
+		obs_ref.id_taxa_obs = obs_group.id_taxa_obs and
+		obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
 	ORDER BY obs_ref.id_taxa_obs, obs_ref.valid_scientific_name,
         best_vernacular.vernacular_en NULLS LAST
 );
