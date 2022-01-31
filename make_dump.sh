@@ -22,6 +22,8 @@ pg_dump -a \
     -T public_api.hexquebec20km  \
     -T public_api.hexquebec50km  \
     -T public_api.hexquebec5km   \
+    -N scratch_vbeaure   \
+    -N observations_partitions \
     >> $out_file
 
 # DUMP hex data in a separate file for space under 100 Mb git management
