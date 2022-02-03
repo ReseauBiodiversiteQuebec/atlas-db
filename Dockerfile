@@ -1,2 +1,13 @@
-FROM postgis/postgis:9.5-2.5
-COPY ./pose_dev.sql /docker-entrypoint-initdb.d/pose_dev.sql
+FROM postgres:13.1
+
+RUN apt update && apt install postgis postgresql-13-postgis-3 postgresql-plpython3-13 python3-setuptools python3-pip git -y
+
+RUN git config --global user.email "vincent.beauregard@usherbrooke.ca"
+RUN git config --global user.name "Vincent Beauregard"
+
+RUN pip3 install git+https://github.com/ReseauBiodiversiteQuebec/bdqc_taxa.git#egg=bdqc_taxa
+
+COPY ./dump_atlas.sql /docker-entrypoint-initdb.d/0_dump_atlas.sql
+COPY ./dump_test_observations.sql /docker-entrypoint-initdb.d/1_dump_test_observations.sql
+COPY ./dump_hex.sql /docker-entrypoint-initdb.d/2_dump_hex.sql
+
