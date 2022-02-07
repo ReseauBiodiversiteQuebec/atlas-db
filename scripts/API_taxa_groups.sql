@@ -10,11 +10,12 @@ CREATE VIEW api.taxa_groups AS (
     )
     select
         taxa_groups.id,
+        taxa_groups.level,
         taxa_groups.vernacular_en,
         taxa_groups.vernacular_fr,
         taxa_obs_agg.id_taxa_obs
     from
         taxa_groups
     left join taxa_obs_agg on taxa_groups.id = taxa_obs_agg.id_group
-    where taxa_groups.level = 1
+    order by taxa_groups.level, taxa_groups.id
 )

@@ -126,6 +126,6 @@ RETURNS json AS $$
             select name matched_name from taxa_vernacular
         )
     ) taxa
-    WHERE LOWER(name) like '%' || LOWER(name)
-		OR LOWER(name) like LOWER(name) || '%';
+    WHERE LOWER(matched_name) like '%' || LOWER(name)
+		OR LOWER(matched_name) like LOWER(name) || '%';
 $$ LANGUAGE sql STABLE;
