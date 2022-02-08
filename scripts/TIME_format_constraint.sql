@@ -57,19 +57,28 @@ SET dwc_event_date = format_dwc_datetime(
 -- 4. Find and remove doubles and implement constraint
 -------------------------------------------------------------------------
 
+CREATE INDEX observations_unique_rows 
+on observations (geom, dwc_event_date,id_taxa_obs, obs_value, id_variables,
+		within_quebec);
+
+
 DROP TABLE IF EXISTS del_obs cascade;
-CREATE TEMPORARY TABLE del_obs AS
+CREATE TABLE del_obs AS
 WITH kept_obs AS (
 	SELECT
 		max(id) id
 	FROM observations
-	GROUP BY (geom, dwc_event_date, id_taxa_obs, obs_value, id_variables))
-select obs.id id_obs, obs_efforts.id_efforts
+	GROUP BY (geom, dwc_event_date,id_taxa_obs, obs_value, id_variables,
+		within_quebec)
+)
+select obs.id id_obs
 from observations obs
 WHERE obs.id not in ( select id from kept_obs );
+
 DELETE FROM obs_efforts where id_obs in ( select id_obs from del_obs);
 DELETE FROM observations where id in ( select id_obs from del_obs);
 DELETE FROM efforts where id not in ( select id_efforts from obs_efforts);
+DROP TABLE IF EXISTS del_obs cascade;
 
 ALTER TABLE public.observations
     ADD CONSTRAINT observations_unique_rows
