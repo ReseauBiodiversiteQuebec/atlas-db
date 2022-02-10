@@ -68,15 +68,15 @@ CREATE FUNCTION public_api.get_obs_ecozones(
 	taxa_keys integer[])
 RETURNS json AS $$
 WITH bbox AS (
-	SELECT ST_GEOMFROMTEXT(
+	SELECT ST_POLYGON(
 	FORMAT('LINESTRING(%s %s, %s %s, %s %s, %s %s, %s %s)',
 		   minx, miny, maxx, miny, maxx, maxy, minx, maxy, minx, miny), 4326
 	) as geometry
 ), h AS (
-	SELECT geom, fid
-	FROM PUBLIC_API.cadre_eco_quebec
+	SELECT simple_geom, fid
+	FROM PUBLIC_API.cadre_eco_quebec, bbox
 	WHERE niv = level
-		AND ST_INTERSECTS(geom, (select geometry from bbox))
+		AND ST_INTERSECTS(geom, bbox.geometry)
 ), year_agg as (
 	SELECT
 		fid,
