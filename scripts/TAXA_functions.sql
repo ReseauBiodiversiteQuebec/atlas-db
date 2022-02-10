@@ -23,7 +23,7 @@ RETURNS SETOF taxa_obs AS $$
             from taxa_vernacular
             left join taxa_obs_vernacular_lookup vernacular_lookup
                 on taxa_vernacular.id = vernacular_lookup.id_taxa_vernacular
-            where taxa_vernacular.name = INITCAP(taxa_name)
+            where LOWER(taxa_vernacular.name) = LOWER(taxa_name)
         )
     )
     select distinct taxa_obs.*
