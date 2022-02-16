@@ -73,7 +73,7 @@ WITH bbox AS (
 		   minx, miny, maxx, miny, maxx, maxy, minx, maxy, minx, miny), 4326
 	) as geometry
 ), h AS (
-	SELECT simple_geom, fid
+	SELECT simple_geom geom, fid
 	FROM PUBLIC_API.cadre_eco_quebec, bbox
 	WHERE niv = level
 		AND ST_INTERSECTS(geom, bbox.geometry)
