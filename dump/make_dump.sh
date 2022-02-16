@@ -17,6 +17,7 @@ pg_dump -s --no-tablespaces \
 pg_dump -a \
     -T observations \
     -T obs_efforts \
+    -T public.observations_backup_202111 \
     -T public_api.hex_250_na \
     -T public_api.hexquebec      \
     -T public_api.hexquebec100km \
