@@ -10,43 +10,43 @@
 ------------------------------------------------------------------------------
 -- 1. CREATE ecozones OBS COUNT PER TAXA + YEAR MATERIALIZED VIEW
 ------------------------------------------------------------------------------
-    DROP MATERIALIZED VIEW IF EXISTS public_api.ecozones_taxa_year_obs_count CASCADE;
-    CREATE MATERIALIZED VIEW public_api.ecozones_taxa_year_obs_count AS
-        SELECT
-            ecozones.fid,
-            ecozones.niv,
-            o.id_taxa_obs,
-            o.year_obs,
-            count(o.id) count_obs
-            FROM
-                public_api.cadre_eco_quebec ecozones,
-                observations o
-            WHERE st_within(o.geom, ecozones.geom)
-                AND o.within_quebec IS TRUE
-            GROUP BY (ecozones.fid, ecozones.niv, o.id_taxa_obs, o.year_obs)
-        WITH DATA;
+    -- DROP MATERIALIZED VIEW IF EXISTS public_api.ecozones_taxa_year_obs_count CASCADE;
+    -- CREATE MATERIALIZED VIEW public_api.ecozones_taxa_year_obs_count AS
+    --     SELECT
+    --         ecozones.fid,
+    --         ecozones.niv,
+    --         o.id_taxa_obs,
+    --         o.year_obs,
+    --         count(o.id) count_obs
+    --         FROM
+    --             public_api.cadre_eco_quebec ecozones,
+    --             observations o
+    --         WHERE st_within(o.geom, ecozones.geom)
+    --             AND o.within_quebec IS TRUE
+    --         GROUP BY (ecozones.fid, ecozones.niv, o.id_taxa_obs, o.year_obs)
+    --     WITH DATA;
 
-    CREATE INDEX
-        ON public_api.ecozones_taxa_year_obs_count (fid);
-    CREATE INDEX
-        ON public_api.ecozones_taxa_year_obs_count (id_taxa_obs);
-    CREATE INDEX
-        ON public_api.ecozones_taxa_year_obs_count (year_obs);
+    -- CREATE INDEX
+    --     ON public_api.ecozones_taxa_year_obs_count (fid);
+    -- CREATE INDEX
+    --     ON public_api.ecozones_taxa_year_obs_count (id_taxa_obs);
+    -- CREATE INDEX
+    --     ON public_api.ecozones_taxa_year_obs_count (year_obs);
 
 ------------------------------------------------------------------------------
--- 2. CREATE ecozones OBS COUNT PER TAXA_GROUP + YEAR MATERIALIZED VIEW
+-- 2. FUNCTION TO RETURN ECOZONES COUNTS FOR TAXA/TAXA_GROUP + YEARS
 ------------------------------------------------------------------------------
-
-
     DROP FUNCTION IF EXISTS public_api.get_ecozone_counts(
-        integer, numeric, numeric, numeric, numeric, integer[], integer
+        integer, numeric, numeric, numeric, numeric, integer, integer, integer[], integer
     );
     CREATE FUNCTION public_api.get_ecozone_counts(
         level integer,
         minX numeric,
         maxX numeric,
         minY numeric,
-        maxY numeric,
+        maxy numeric,
+        minYear integer DEFAULT 1950,
+        maxYear integer DEFAULT 2100,
         taxaKeys integer[] DEFAULT NULL,
         taxaGroupKey integer DEFAULT NULL)
     RETURNS json AS $$
@@ -57,7 +57,7 @@
             taxaGroupKey := (SELECT id from taxa_groups where level = 0);
         END IF;
         IF (taxaGroupKey IS NOT NULL AND taxaKeys IS NOT NULL) THEN
-            RAISE 'ONLY one of parameters `taxa_group_keys` or `taxaKeys` can be specified';
+            RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
         END IF;
 
         WITH bbox AS (
@@ -66,45 +66,35 @@
 				minX, minY, maxX, minY, maxX, maxY, minX, maxY, minX, minY), 4326
 			) as geometry
 		), ecozones AS (
-			SELECT simple_geom geom, fid, niv
+			SELECT simple_geom geom, fid, niv, nom
 			FROM PUBLIC_API.cadre_eco_quebec, bbox
 			WHERE niv = level
 				AND ST_INTERSECTS(geom, bbox.geometry)
-        ), year_agg as (
+        ), fid_agg as (
             SELECT
                     o.fid,
-                    o.year_obs,
                     sum(o.count_obs) count_obs,
-                    array_agg(DISTINCT(o.id_taxa_obs)) id_taxa_obs
+                    count(distinct(o.id_taxa_obs)) count_species
                 FROM public_api.ecozones_taxa_year_obs_count o, ecozones
                 WHERE o.fid = ecozones.fid AND o.niv = ecozones.niv
                     AND o.id_taxa_obs = ANY(taxaKeys)
-                GROUP BY (o.fid, o.year_obs)
+                    AND o.year_obs >= minYear AND o.year_obs <= maxYear
+                GROUP BY o.fid
             UNION
             SELECT
                     o.fid,
-                    o.year_obs,
                     sum(o.count_obs) count_obs,
-                    array_agg(DISTINCT(o.id_taxa_obs)) id_taxa_obs
+                    count(distinct(o.id_taxa_obs)) count_species
                 FROM public_api.ecozones_taxa_year_obs_count o,
                     ecozones,
                     taxa_obs_group_lookup glu
                 WHERE o.fid = ecozones.fid AND o.niv = ecozones.niv
-                    AND glu.id_group = taxaGroupKey 
-                    AND o.id_taxa_obs = glu.id_taxa_obs
-                GROUP BY (o.fid, o.year_obs)
-        ), fid_agg AS (
-            SELECT
-                year_agg.fid,
-                json_agg(json_build_object(
-                    'year', year_agg.year_obs,
-                    'obsCount', year_agg.count_obs,
-                    'speciesKeys', year_agg.id_taxa_obs
-                )) year_counts
-            FROM year_agg
-            GROUP BY year_agg.fid
+                    AND o.year_obs >= minYear AND o.year_obs <= maxYear
+                    AND glu.id_group = taxaGroupKey
+                AND glu.id_taxa_obs = o.id_taxa_obs
+                GROUP BY o.fid
         ), features as (
-            select ecozones.geom, fid_agg.year_counts
+            select ecozones.geom, ecozones.nom, fid_agg.count_obs, fid_agg.count_species
             FROM ecozones LEFT JOIN fid_agg ON ecozones.fid=fid_agg.fid
         )
         SELECT
@@ -117,4 +107,5 @@
         RETURN out_collection;
     END;
     $$ LANGUAGE plpgsql STABLE;
-SELECT public_api.get_ecozone_counts(1, -76, -68, 45, 50, NULL, 2);
+
+    EXPLAIN ANALYZE SELECT public_api.get_ecozone_counts(1, -76, -68, 45, 50, 2000, 2021, NULL, 2);
