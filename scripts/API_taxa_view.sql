@@ -1,26 +1,5 @@
--- DROP MATERIALIZED VIEW IF EXISTS taxa_obs_quality_metrics CASCADE;
-
--- CREATE MATERIALIZED VIEW taxa_obs_quality_metrics as
--- select
--- 	lookup.id_taxa_obs,
--- 	count(lookup.id) num_obs,
--- 	count(distinct(lookup.year_obs)) num_year_obs,
--- 	min(lookup.year_obs) min_year_obs,
--- 	max(lookup.year_obs) max_year_obs,
--- 	count(lookup.id) / count(distinct(lookup.year_obs)) average_number_per_year,
--- 	count(distinct(lookup.fid)) num_spatial_cell,
--- 	count(lookup.id) / count(distinct(lookup.fid)) average_number_per_cell,
--- 	min(h.centroid_y) min_cell_y,
--- 	max(h.centroid_y) max_cell_y
--- from
--- 	public_api.hexquebec_obs_lookup lookup,
--- 	public_api.hexquebec h
--- where
--- 	lookup.scale = h.scale and lookup.fid = h.fid
--- group by id_taxa_obs;
-
-DROP VIEW if exists api.taxa CASCADE;
-CREATE VIEW api.taxa AS (
+-- DROP VIEW if exists api.taxa CASCADE;
+CREATE OR REPLACE VIEW api.taxa AS (
 	with obs_ref as (
 		select
 			obs_lookup.id_taxa_obs,
@@ -29,7 +8,9 @@ CREATE VIEW api.taxa AS (
 			taxa_ref.rank,
 			json_agg(json_build_object(
 			   'source_name', taxa_ref.source_name,
-			   'source_taxon_key', taxa_ref.source_record_id)) as source_references
+			   'source_taxon_key', taxa_ref.source_record_id,
+			   'source_scientific_name', taxa_ref.scientific_name)
+			   ) as source_references
 		from taxa_obs_ref_lookup obs_lookup
         left join taxa_obs on obs_lookup.id_taxa_obs = taxa_obs.id
 		left join taxa_ref on obs_lookup.id_taxa_ref_valid = taxa_ref.id
@@ -37,13 +18,20 @@ CREATE VIEW api.taxa AS (
 		group by (obs_lookup.id_taxa_obs, taxa_ref.scientific_name, taxa_ref.rank)
 	), obs_group as (
 		select
-			distinct on (group_lookup.id_taxa_obs)
 			group_lookup.id_taxa_obs,
 			taxa_groups.vernacular_en as group_en,
 			taxa_groups.vernacular_fr as group_fr
 		from taxa_obs_group_lookup group_lookup
 		left join taxa_groups on group_lookup.id_group = taxa_groups.id
 		where taxa_groups.level = 1
+	), status_group as (
+		SELECT
+			group_lookup.id_taxa_obs,
+			taxa_groups.vernacular_en as vernacular_en,
+			taxa_groups.vernacular_fr as vernacular_fr
+		from taxa_obs_group_lookup group_lookup
+		left join taxa_groups on group_lookup.id_group = taxa_groups.id
+		where taxa_groups.id = ANY (ARRAY[21, 22, 23, 24])
 	), vernacular_all as(
 		select v_lookup.id_taxa_obs, taxa_vernacular.*
 		from taxa_obs_vernacular_lookup v_lookup
@@ -79,34 +67,27 @@ CREATE VIEW api.taxa AS (
 		best_vernacular.vernacular_fr,
 		obs_group.group_en,
 		obs_group.group_fr,
+		status_group.vernacular_fr qc_status_fr,
+		status_group.vernacular_en qc_status_en,
 		vernacular_group.vernacular,
-		obs_ref.source_references,
-		metrics.num_obs,
-		metrics.num_year_obs,
-		metrics.min_year_obs,
-		metrics.max_year_obs,
-		metrics.average_number_per_year,
-		metrics.num_spatial_cell,
-		metrics.average_number_per_cell,
-		metrics.min_cell_y,
-		metrics.max_cell_y
+		obs_ref.source_references
 	from
 		obs_ref,
-		taxa_obs_quality_metrics metrics,
 		vernacular_group,
 		obs_group,
+		status_group,
 		best_vernacular
 	where
-		obs_ref.id_taxa_obs = metrics.id_taxa_obs and
 		obs_ref.id_taxa_obs = vernacular_group.id_taxa_obs and
 		obs_ref.id_taxa_obs = obs_group.id_taxa_obs and
+		obs_ref.id_taxa_obs = status_group.id_taxa_obs and
 		obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
 	ORDER BY obs_ref.id_taxa_obs, obs_ref.valid_scientific_name,
         best_vernacular.vernacular_en NULLS LAST
 );
 
-DROP FUNCTION if exists api.match_taxa CASCADE;
-CREATE FUNCTION api.match_taxa (taxa_name TEXT)
+-- DROP FUNCTION if exists api.match_taxa CASCADE;
+CREATE OR REPLACE FUNCTION api.match_taxa (taxa_name TEXT)
 RETURNS SETOF api.taxa
 AS $$
 SELECT * FROM api.taxa
@@ -114,8 +95,8 @@ WHERE id_taxa_obs IN (select id from public.match_taxa_obs(taxa_name));
 $$ LANGUAGE SQL STABLE;
 
 -- Autocomplete taxa_name
-DROP FUNCTION IF EXISTS api.taxa_autocomplete (text);
-CREATE FUNCTION api.taxa_autocomplete(
+-- DROP FUNCTION IF EXISTS api.taxa_autocomplete (text);
+CREATE OR REPLACE FUNCTION api.taxa_autocomplete(
     name text)
 RETURNS json AS $$
     SELECT json_agg(DISTINCT(matched_name))
@@ -129,3 +110,12 @@ RETURNS json AS $$
     WHERE LOWER(matched_name) like '%' || LOWER(name)
 		OR LOWER(matched_name) like LOWER(name) || '%';
 $$ LANGUAGE sql STABLE;
+
+
+CREATE OR REPLACE FUNCTION api.get_taxa_groups(taxa_keys integer[]) RETURNS SETOF api.taxa
+    LANGUAGE sql STABLE
+    AS $$
+SELECT *
+	FROM api.taxa
+	WHERE id_taxa_obs = ANY(taxa_keys);
+$$;
