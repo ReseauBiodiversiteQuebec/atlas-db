@@ -72,16 +72,11 @@ CREATE OR REPLACE VIEW api.taxa AS (
 		vernacular_group.vernacular,
 		obs_ref.source_references
 	from
-		obs_ref,
-		vernacular_group,
-		obs_group,
-		status_group,
-		best_vernacular
-	where
-		obs_ref.id_taxa_obs = vernacular_group.id_taxa_obs and
-		obs_ref.id_taxa_obs = obs_group.id_taxa_obs and
-		obs_ref.id_taxa_obs = status_group.id_taxa_obs and
-		obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
+		obs_ref
+	LEFT JOIN vernacular_group ON obs_ref.id_taxa_obs = vernacular_group.id_taxa_obs
+	LEFT JOIN obs_group ON obs_ref.id_taxa_obs = obs_group.id_taxa_obs
+	LEFT JOIN status_group ON obs_ref.id_taxa_obs = status_group.id_taxa_obs
+	LEFT JOIN best_vernacular ON obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
 	ORDER BY obs_ref.id_taxa_obs, obs_ref.valid_scientific_name,
         best_vernacular.vernacular_en NULLS LAST
 );
@@ -90,8 +85,8 @@ CREATE OR REPLACE VIEW api.taxa AS (
 CREATE OR REPLACE FUNCTION api.match_taxa (taxa_name TEXT)
 RETURNS SETOF api.taxa
 AS $$
-SELECT * FROM api.taxa
-WHERE id_taxa_obs IN (select id from public.match_taxa_obs(taxa_name));
+SELECT t.* FROM api.taxa t, public.match_taxa_obs(taxa_name) match_t
+WHERE id_taxa_obs = match_t.id
 $$ LANGUAGE SQL STABLE;
 
 -- Autocomplete taxa_name
@@ -119,3 +114,18 @@ SELECT *
 	FROM api.taxa
 	WHERE id_taxa_obs = ANY(taxa_keys);
 $$;
+
+
+CREATE OR REPLACE FUNCTION api.match_taxa_list (taxa_names TEXT[])
+RETURNS SETOF api.taxa
+AS $$
+with _input as (
+	SELECT unnest(taxa_names) taxa_name
+)
+SELECT t.*
+FROM
+	(SELECT unnest(taxa_names) taxa_name) _input,
+	api.taxa t,
+	public.match_taxa_obs(_input.taxa_name) match_t
+WHERE id_taxa_obs = match_t.id
+$$ LANGUAGE SQL STABLE;
