@@ -36,10 +36,10 @@
 ------------------------------------------------------------------------------
 -- 2. FUNCTION TO RETURN ECOZONES COUNTS FOR TAXA/TAXA_GROUP + YEARS
 ------------------------------------------------------------------------------
-    DROP FUNCTION IF EXISTS public_api.get_ecozone_counts(
-        integer, numeric, numeric, numeric, numeric, integer, integer, integer[], integer
-    );
-    CREATE FUNCTION public_api.get_ecozone_counts(
+    -- DROP FUNCTION IF EXISTS public_api.get_ecozone_counts(
+    --     integer, numeric, numeric, numeric, numeric, integer, integer, integer[], integer
+    -- );
+    CREATE OR REPLACE FUNCTION public_api.get_ecozone_counts(
         level integer,
         minX numeric,
         maxX numeric,
@@ -74,7 +74,8 @@
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species
+                    count(distinct(o.id_taxa_obs)) count_species,
+                    null est_count_species
                 FROM public_api.ecozones_taxa_year_obs_count o, ecozones
                 WHERE o.fid = ecozones.fid AND o.niv = ecozones.niv
                     AND o.id_taxa_obs = ANY(taxaKeys)
@@ -84,17 +85,28 @@
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species
+                    count(distinct(o.id_taxa_obs)) count_species,
+                    max(r.richness) est_count_species
                 FROM public_api.ecozones_taxa_year_obs_count o,
                     ecozones,
-                    taxa_obs_group_lookup glu
+                    taxa_obs_group_lookup glu,
+                    public_api.ecozones_species_group_richness r
                 WHERE o.fid = ecozones.fid AND o.niv = ecozones.niv
                     AND o.year_obs >= minYear AND o.year_obs <= maxYear
                     AND glu.id_group = taxaGroupKey
-                AND glu.id_taxa_obs = o.id_taxa_obs
+                    AND glu.id_taxa_obs = o.id_taxa_obs
+                    AND r.fid = ecozones.fid
+                    AND r.niv = ecozones.niv
+                    AND r.id_group = taxaGroupKey
                 GROUP BY o.fid
         ), features as (
-            select ecozones.geom, ecozones.nom, fid_agg.count_obs, fid_agg.count_species
+            select
+                ecozones.geom,
+                ecozones.fid,
+                ecozones.niv as level,
+                fid_agg.count_obs,
+                fid_agg.count_species,
+                fid_agg.est_count_species
             FROM ecozones LEFT JOIN fid_agg ON ecozones.fid=fid_agg.fid
         )
         SELECT
@@ -109,3 +121,4 @@
     $$ LANGUAGE plpgsql STABLE;
 
     EXPLAIN ANALYZE SELECT public_api.get_ecozone_counts(1, -76, -68, 45, 50, 2000, 2021, NULL, 2);
+    -- EXPLAIN ANALYZE SELECT public_api.get_ecozone_counts(1, -76, -68, 45, 50, 2000, 2021, ARRAY[6450, 8354]);

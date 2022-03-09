@@ -48,10 +48,10 @@
 ------------------------------------------------------------------------------
 -- 2. FUNCTION TO RETURN HEX COUNTS FOR TAXA/TAXA_GROUP + YEARS
 ------------------------------------------------------------------------------
-    DROP FUNCTION IF EXISTS public_api.get_hex_counts(
-        integer, numeric, numeric, numeric, numeric, integer, integer, integer[], integer
-    );
-    CREATE FUNCTION public_api.get_hex_counts(
+    -- DROP FUNCTION IF EXISTS public_api.get_hex_counts(
+    --     integer, numeric, numeric, numeric, numeric, integer, integer, integer[], integer
+    -- );
+    CREATE OR REPLACE FUNCTION public_api.get_hex_counts(
         level integer,
         minX numeric,
         maxX numeric,
@@ -72,23 +72,27 @@
             RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
         END IF;
 
-        WITH hex as (
+        WITH bbox AS (
+			SELECT ST_POLYGON(
+			FORMAT('LINESTRING(%s %s, %s %s, %s %s, %s %s, %s %s)',
+				minX, minY, maxX, minY, maxX, maxY, minX, maxY, minX, minY), 4326
+			) as geometry
+        ), hex as (
             SELECT h.geom, h.fid, h.scale
-                FROM PUBLIC_API.hexquebec h
+                FROM PUBLIC_API.hexquebec h, bbox
                 WHERE scale = level
-                    AND minX < ST_X(CENTROID) AND ST_X(CENTROID) < -maxX
-                    AND minY < ST_Y(CENTROID) AND ST_Y(CENTROID) < maxy
+				    AND ST_INTERSECTS(geom, bbox.geometry)
             UNION
             SELECT h.geom, h.fid, 250 scale
-                FROM PUBLIC_API.hex_250_na h
-                WHERE
-                    minX < ST_X(CENTROID) AND ST_X(CENTROID) < -maxX
-                    AND minY < ST_Y(CENTROID) AND ST_Y(CENTROID) < maxy
+                FROM PUBLIC_API.hex_250_na h, bbox
+                WHERE level = 250
+				    AND ST_INTERSECTS(geom, bbox.geometry)
         ), fid_agg as (
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species
+                    count(distinct(o.id_taxa_obs)) count_species,
+                    null est_count_species
                 FROM public_api.hex_taxa_year_obs_count o, hex
                 WHERE o.fid = hex.fid AND o.scale = hex.scale
                     AND o.id_taxa_obs = ANY(taxaKeys)
@@ -98,17 +102,28 @@
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species
+                    count(distinct(o.id_taxa_obs)) count_species,
+                    max(r.richness) est_count_species
                 FROM public_api.hex_taxa_year_obs_count o,
                     hex,
-                    taxa_obs_group_lookup glu
+                    taxa_obs_group_lookup glu,
+                    public_api.hex_species_group_richness r
                 WHERE o.fid = hex.fid AND o.scale = hex.scale
                     AND o.year_obs >= minYear AND o.year_obs <= maxYear
                     AND glu.id_group = taxaGroupKey
-                AND glu.id_taxa_obs = o.id_taxa_obs
+                    AND r.fid = hex.fid
+                    AND r.scale = hex.scale
+                    AND r.id_group = taxaGroupKey
+                    AND glu.id_taxa_obs = o.id_taxa_obs
                 GROUP BY o.fid
         ), features as (
-            select hex.geom, fid_agg.count_obs, fid_agg.count_species
+            select
+                hex.geom,
+                hex.fid,
+                hex.scale as level,
+                fid_agg.count_obs,
+                fid_agg.count_species,
+                fid_agg.est_count_species
             FROM hex LEFT JOIN fid_agg ON hex.fid=fid_agg.fid
         )
         SELECT
@@ -121,17 +136,17 @@
         RETURN out_collection;
     END;
     $$ LANGUAGE plpgsql STABLE;
--- EXPLAIN ANALYZE SELECT public_api.get_hex_year_counts(100, -76, -68, 45, 50, 2000, 2021, NULL, 2);
+    EXPLAIN ANALYZE SELECT public_api.get_hex_counts(100, -76, -68, 45, 50, 2000, 2021, NULL, 2);
 
 
 ------------------------------------------------------------------------------
 -- 3. FUNCTION TO RETURN YEAR COUNTS FOR TAXA/TAXA_GROUP
 ------------------------------------------------------------------------------
 
-    DROP FUNCTION IF EXISTS public_api.get_year_counts(
-        integer[], integer
-    );
-    CREATE FUNCTION public_api.get_year_counts(
+    -- DROP FUNCTION IF EXISTS public_api.get_year_counts(
+    --     integer[], integer
+    -- );
+    CREATE OR REPLACE FUNCTION public_api.get_year_counts(
         taxaKeys integer[] DEFAULT NULL,
         taxaGroupKey integer DEFAULT NULL)
     RETURNS json AS $$
