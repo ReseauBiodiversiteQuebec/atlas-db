@@ -77,7 +77,7 @@ WITH h AS (
 	FROM year_agg
 	GROUP BY fid
 ), features as (
-	select h.geom, fid_agg.year_counts
+	select h.geom, h.fid, h.scale as level, fid_agg.year_counts
 	FROM h LEFT JOIN fid_agg ON h.fid=fid_agg.fid
 ) 
 SELECT
