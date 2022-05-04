@@ -1,0 +1,49 @@
+REVOKE ALL ON schema public FROM public;
+REVOKE ALL ON schema _public FROM public;
+
+
+REVOKE ALL ON schema public FROM read_only_all;
+REVOKE ALL ON schema _public FROM read_only_all;
+
+
+REVOKE ALL ON schema public FROM read_write_all;
+REVOKE ALL ON schema _public FROM read_write_all;
+
+
+---revoke all on every role when a ressource is created------
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM public;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM read_only_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM read_write_all;
+
+---public (role) access-----
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO public;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO public;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO public;
+
+
+GRANT USAGE ON SCHEMA public TO read_only_all;
+GRANT USAGE ON SCHEMA _public TO read_only_all;
+---read_only_all access ---- 
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO read_only_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO read_only_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO read_only_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA _public GRANT SELECT ON TABLES TO read_only_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA _public GRANT USAGE ON SEQUENCES TO read_only_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA _public GRANT EXECUTE ON FUNCTIONS TO read_only_all;
+
+
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO read_only_all;
+GRANT SELECT ON ALL TABLES IN SCHEMA _public TO read_only_all;
+
+
+
+---grant full access to read_write role except delete (only postgres user can remove)-----
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT,INSERT, UPDATE, TRUNCATE, REFERENCES,TRIGGER ON TABLES TO read_write_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO read_write_all;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO read_write_all;
+
+GRANT USAGE ON SCHEMA public TO read_write_all;
+GRANT USAGE ON SCHEMA _public TO read_write_all;
+
+GRANT SELECT,INSERT, UPDATE, TRUNCATE, REFERENCES,TRIGGER ON ALL TABLES IN SCHEMA public TO read_write_all;
+GRANT SELECT,INSERT, UPDATE, TRUNCATE, REFERENCES,TRIGGER ON ALL TABLES IN SCHEMA _public TO read_write_all;
