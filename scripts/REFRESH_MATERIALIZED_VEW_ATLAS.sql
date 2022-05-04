@@ -1,3 +1,6 @@
+-- Update qc list of observations
+SELECT refresh_taxa_group_members_quebec();
+
 CREATE OR REPLACE VIEW mat_view_dependencies AS
 WITH RECURSIVE s(start_schemaname,start_relname,start_relkind,
 		 schemaname,relname,relkind,reloid,owneroid,ownername,depth)
