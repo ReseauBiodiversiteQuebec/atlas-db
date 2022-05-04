@@ -1,12 +1,10 @@
-CREATE OR REPLACE FUNCTION public_api.get_hex_species_list(
-    hexFid integer,
-    hexLevel integer,
+CREATE OR REPLACE FUNCTION public_api.get_ecozones_species_list(
+    ecozonesFid integer,
+    ecozonesLevel integer,
     minYear integer DEFAULT 1950,
     maxYear integer DEFAULT 2200,
     taxaKeys integer[] DEFAULT NULL,
     taxaGroupKey integer DEFAULT NULL
--- ) AS (
---     VALUES (38, 50, 1950, 2022)
 )
 RETURNS SETOF api.taxa AS
 $$
@@ -32,10 +30,10 @@ BEGIN
             taxa.*
         FROM
             -- params,
-            public_api.hex_taxa_year_obs_count o,
+            public_api.ecozones_taxa_year_obs_count o,
             api.taxa
-        WHERE o.fid = hexFid
-            AND o.scale = hexLevel
+        WHERE o.fid = ecozonesFid
+            AND o.niv = ecozonesLevel
             AND o.year_obs >= minYear
             AND o.year_obs <= maxYear
             AND o.id_taxa_obs = taxa.id_taxa_obs
@@ -44,4 +42,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
-EXPLAIN ANALYZE select public_api.get_hex_species_list(38, 50, 1950, 2022, NULL, 2);
+EXPLAIN ANALYZE select public_api.get_ecozones_species_list(3, 1, 1950, 2022, NULL, 2);
