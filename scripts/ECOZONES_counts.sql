@@ -74,8 +74,7 @@
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species,
-                    null est_count_species
+                    count(distinct(o.id_taxa_obs)) count_species
                 FROM public_api.ecozones_taxa_year_obs_count o, ecozones
                 WHERE o.fid = ecozones.fid AND o.niv = ecozones.niv
                     AND o.id_taxa_obs = ANY(taxaKeys)
@@ -85,19 +84,14 @@
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species,
-                    max(r.richness) est_count_species
+                    count(distinct(o.id_taxa_obs)) count_species
                 FROM public_api.ecozones_taxa_year_obs_count o,
                     ecozones,
-                    taxa_obs_group_lookup glu,
-                    public_api.ecozones_species_group_richness r
+                    taxa_obs_group_lookup glu
                 WHERE o.fid = ecozones.fid AND o.niv = ecozones.niv
                     AND o.year_obs >= minYear AND o.year_obs <= maxYear
                     AND glu.id_group = taxaGroupKey
                     AND glu.id_taxa_obs = o.id_taxa_obs
-                    AND r.fid = ecozones.fid
-                    AND r.niv = ecozones.niv
-                    AND r.id_group = taxaGroupKey
                 GROUP BY o.fid
         ), features as (
             select
@@ -106,8 +100,13 @@
                 ecozones.niv as level,
                 fid_agg.count_obs,
                 fid_agg.count_species,
-                fid_agg.est_count_species
-            FROM ecozones LEFT JOIN fid_agg ON ecozones.fid=fid_agg.fid
+                r.richness est_count_species
+            FROM ecozones
+            LEFT JOIN fid_agg ON ecozones.fid=fid_agg.fid
+            LEFT JOIN public_api.ecozones_species_group_richness r
+                ON r.fid = ecozones.fid
+                AND r.niv = ecozones.niv
+                AND r.id_group = taxaGroupKey
         )
         SELECT
             json_build_object(

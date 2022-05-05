@@ -91,8 +91,7 @@
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species,
-                    null est_count_species
+                    count(distinct(o.id_taxa_obs)) count_species
                 FROM public_api.hex_taxa_year_obs_count o, hex
                 WHERE o.fid = hex.fid AND o.scale = hex.scale
                     AND o.id_taxa_obs = ANY(taxaKeys)
@@ -102,18 +101,13 @@
             SELECT
                     o.fid,
                     sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species,
-                    max(r.richness) est_count_species
+                    count(distinct(o.id_taxa_obs)) count_species
                 FROM public_api.hex_taxa_year_obs_count o,
                     hex,
-                    taxa_obs_group_lookup glu,
-                    public_api.hex_species_group_richness r
+                    taxa_obs_group_lookup glu
                 WHERE o.fid = hex.fid AND o.scale = hex.scale
                     AND o.year_obs >= minYear AND o.year_obs <= maxYear
                     AND glu.id_group = taxaGroupKey
-                    AND r.fid = hex.fid
-                    AND r.scale = hex.scale
-                    AND r.id_group = taxaGroupKey
                     AND glu.id_taxa_obs = o.id_taxa_obs
                 GROUP BY o.fid
         ), features as (
@@ -123,8 +117,13 @@
                 hex.scale as level,
                 fid_agg.count_obs,
                 fid_agg.count_species,
-                fid_agg.est_count_species
-            FROM hex LEFT JOIN fid_agg ON hex.fid=fid_agg.fid
+                r.richness est_count_species
+            FROM hex
+            LEFT JOIN fid_agg ON hex.fid=fid_agg.fid
+            LEFT JOIN public_api.hex_species_group_richness r
+                ON r.fid = hex.fid
+                AND r.scale = hex.scale
+                AND r.id_group = taxaGroupKey
         )
         SELECT
             json_build_object(
@@ -136,7 +135,7 @@
         RETURN out_collection;
     END;
     $$ LANGUAGE plpgsql STABLE;
-    EXPLAIN ANALYZE SELECT public_api.get_hex_counts(100, -76, -68, 45, 50, 2000, 2021, NULL, 2);
+    EXPLAIN ANALYZE SELECT public_api.get_hex_counts(100, -76, -68, 45, 50, 2000, 2021, NULL, 19);
 
 
 ------------------------------------------------------------------------------
