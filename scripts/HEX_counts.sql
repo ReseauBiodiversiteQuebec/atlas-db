@@ -48,9 +48,95 @@
 ------------------------------------------------------------------------------
 -- 2. FUNCTION TO RETURN HEX COUNTS FOR TAXA/TAXA_GROUP + YEARS
 ------------------------------------------------------------------------------
-    -- DROP FUNCTION IF EXISTS public_api.get_hex_counts(
+    -- DROP FUNCTION IF EXISTS public_api.hex_counts(
     --     integer, numeric, numeric, numeric, numeric, integer, integer, integer[], integer
     -- );
+    CREATE OR REPLACE FUNCTION public_api.hex_counts(
+        level integer,
+        minX numeric,
+        maxX numeric,
+        minY numeric,
+        maxy numeric,
+        minYear integer DEFAULT 1000,
+        maxYear integer DEFAULT 2100,
+        taxaKeys integer[] DEFAULT NULL,
+        taxaGroupKey integer DEFAULT NULL)
+    RETURNS TABLE (
+        geom geometry,
+        fid integer,
+        scale integer,
+        count_obs integer,
+        count_species integer,
+        est_count_species integer
+    ) AS $$
+    DECLARE
+        out_collection json;
+    BEGIN
+        IF (taxaGroupKey IS NULL AND taxaKeys IS NULL) THEN
+            taxaGroupKey := (SELECT id from taxa_groups where level = 0);
+        END IF;
+        IF (taxaGroupKey IS NOT NULL AND taxaKeys IS NOT NULL) THEN
+            RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
+        END IF;
+
+        RETURN QUERY
+            WITH bbox AS (
+                SELECT ST_POLYGON(
+                FORMAT('LINESTRING(%s %s, %s %s, %s %s, %s %s, %s %s)',
+                    minX, minY, maxX, minY, maxX, maxY, minX, maxY, minX, minY),
+                    4326
+                ) as geometry
+            ), hex as (
+                SELECT h.geom, h.fid, h.scale
+                    FROM PUBLIC_API.hexquebec h, bbox
+                    WHERE h.scale = level
+                        AND ST_INTERSECTS(h.geom, bbox.geometry)
+                UNION
+                SELECT h.geom, h.fid, 250 scale
+                    FROM PUBLIC_API.hex_250_na h, bbox
+                    WHERE level = 250
+                        AND ST_INTERSECTS(h.geom, bbox.geometry)
+            ), fid_agg as (
+                SELECT
+                        o.fid,
+                        sum(o.count_obs) count_obs,
+                        count(distinct(o.id_taxa_obs)) count_species
+                    FROM public_api.hex_taxa_year_obs_count o, hex
+                    WHERE o.fid = hex.fid AND o.scale = hex.scale
+                        AND o.id_taxa_obs = ANY(taxaKeys)
+                        AND o.year_obs >= minYear AND o.year_obs <= maxYear
+                    GROUP BY o.fid
+                UNION
+                SELECT
+                        o.fid,
+                        sum(o.count_obs) count_obs,
+                        count(distinct(o.id_taxa_obs)) count_species
+                    FROM public_api.hex_taxa_year_obs_count o,
+                        hex,
+                        taxa_obs_group_lookup glu
+                    WHERE o.fid = hex.fid AND o.scale = hex.scale
+                        AND o.year_obs >= minYear AND o.year_obs <= maxYear
+                        AND glu.id_group = taxaGroupKey
+                        AND glu.id_taxa_obs = o.id_taxa_obs
+                    GROUP BY o.fid
+            )
+            select
+                hex.geom,
+                hex.fid::integer,
+                hex.scale::integer,
+                fid_agg.count_obs::integer,
+                fid_agg.count_species::integer,
+                r.richness::integer est_count_species
+            FROM hex
+            LEFT JOIN fid_agg ON hex.fid=fid_agg.fid
+            LEFT JOIN public_api.hex_species_group_richness r
+                ON r.fid = hex.fid
+                AND r.scale = hex.scale
+                AND r.id_group = taxaGroupKey;
+    END;
+    $$ LANGUAGE plpgsql STABLE;
+    EXPLAIN ANALYZE SELECT public_api.hex_counts(100, -76, -68, 45, 50, 2000, 2021, NULL, 19);
+
     CREATE OR REPLACE FUNCTION public_api.get_hex_counts(
         level integer,
         minX numeric,
@@ -72,66 +158,22 @@
             RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
         END IF;
 
-        WITH bbox AS (
-			SELECT ST_POLYGON(
-			FORMAT('LINESTRING(%s %s, %s %s, %s %s, %s %s, %s %s)',
-				minX, minY, maxX, minY, maxX, maxY, minX, maxY, minX, minY), 4326
-			) as geometry
-        ), hex as (
-            SELECT h.geom, h.fid, h.scale
-                FROM PUBLIC_API.hexquebec h, bbox
-                WHERE scale = level
-				    AND ST_INTERSECTS(geom, bbox.geometry)
-            UNION
-            SELECT h.geom, h.fid, 250 scale
-                FROM PUBLIC_API.hex_250_na h, bbox
-                WHERE level = 250
-				    AND ST_INTERSECTS(geom, bbox.geometry)
-        ), fid_agg as (
-            SELECT
-                    o.fid,
-                    sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species
-                FROM public_api.hex_taxa_year_obs_count o, hex
-                WHERE o.fid = hex.fid AND o.scale = hex.scale
-                    AND o.id_taxa_obs = ANY(taxaKeys)
-                    AND o.year_obs >= minYear AND o.year_obs <= maxYear
-                GROUP BY o.fid
-            UNION
-            SELECT
-                    o.fid,
-                    sum(o.count_obs) count_obs,
-                    count(distinct(o.id_taxa_obs)) count_species
-                FROM public_api.hex_taxa_year_obs_count o,
-                    hex,
-                    taxa_obs_group_lookup glu
-                WHERE o.fid = hex.fid AND o.scale = hex.scale
-                    AND o.year_obs >= minYear AND o.year_obs <= maxYear
-                    AND glu.id_group = taxaGroupKey
-                    AND glu.id_taxa_obs = o.id_taxa_obs
-                GROUP BY o.fid
-        ), features as (
-            select
-                hex.geom,
-                hex.fid,
-                hex.scale as level,
-                fid_agg.count_obs,
-                fid_agg.count_species,
-                r.richness est_count_species
-            FROM hex
-            LEFT JOIN fid_agg ON hex.fid=fid_agg.fid
-            LEFT JOIN public_api.hex_species_group_richness r
-                ON r.fid = hex.fid
-                AND r.scale = hex.scale
-                AND r.id_group = taxaGroupKey
-        )
         SELECT
             json_build_object(
                 'type', 'FeatureCollection',
                 'features', json_agg(ST_AsGeoJSON(features.*)::json)
                 )
             INTO out_collection
-            FROM features;
+            FROM public_api.hex_counts(
+                level integer,
+                minX,
+                maxX,
+                minY,
+                maxy,
+                minYear,
+                maxYear,
+                taxaKeys,
+                taxaGroupKey);
         RETURN out_collection;
     END;
     $$ LANGUAGE plpgsql STABLE;
