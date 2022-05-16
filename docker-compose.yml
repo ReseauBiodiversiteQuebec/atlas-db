@@ -4,8 +4,9 @@ services:
     db:
       build: .
       ports:
-        - "${PGPORT}:${PGPORT}"
+        - "${PGPORT}:5432"
       environment:
+        POSTGRES_PORT: ${PGPORT}
         POSTGRES_DB: ${PGDATABASE}
         POSTGRES_USER: ${PGUSER}
         POSTGRES_PASSWORD: ${PGPASSWORD}
@@ -16,7 +17,7 @@ services:
       links:
         - db:db
       environment:
-        PGRST_DB_URI: postgres://${PGUSER}:${PGPASSWORD}@db:${PGPORT}/${PGDATABASE}
+        PGRST_DB_URI: postgres://${PGUSER}:${PGPASSWORD}@db:5432/${PGDATABASE}
         PGRST_DB_SCHEMA: "public, api"
         PGRST_DB_ANON_ROLE: ""
         PGRST_SERVER_PROXY_URI: "${PGHOST}:${PGAPIPORT}"

@@ -7,7 +7,7 @@ RUN git config --global user.name "Vincent Beauregard"
 
 RUN pip3 install git+https://github.com/ReseauBiodiversiteQuebec/bdqc_taxa.git#egg=bdqc_taxa
 
-COPY ./dump_atlas.sql /docker-entrypoint-initdb.d/0_dump_atlas.sql
-COPY ./dump_test_observations.sql /docker-entrypoint-initdb.d/1_dump_test_observations.sql
-COPY ./dump_hex.sql /docker-entrypoint-initdb.d/2_dump_hex.sql
+COPY ./dump/dump_atlas.sql /docker-entrypoint-initdb.d/0_dump_atlas.sql
+COPY ./dump/dump_test_observations.sql /docker-entrypoint-initdb.d/1_dump_test_observations.sql
+COPY ./dump/dump_hex.sql /docker-entrypoint-initdb.d/2_dump_hex.sql
 
