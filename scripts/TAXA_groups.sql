@@ -174,3 +174,6 @@ CREATE VIEW public.taxa_obs_group_lookup AS (
 	    on taxa_ref.id = obs_lookup.id_taxa_ref
 );
 
+ALTER TABLE taxa_groups add column source_desc text;
+
+ALTER TABLE taxa_group_members add unique (id_group, scientific_name);
