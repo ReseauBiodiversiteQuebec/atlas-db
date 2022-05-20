@@ -61,7 +61,7 @@ CREATE OR REPLACE VIEW api.taxa AS (
 		group by vernacular_all.id_taxa_obs
 	)
 	select
-		distinct on (obs_ref.id_taxa_obs, obs_ref.valid_scientific_name)
+		distinct on (obs_ref.id_taxa_obs)
 		obs_ref.id_taxa_obs,
         obs_ref.observed_scientific_name,
 		obs_ref.valid_scientific_name,

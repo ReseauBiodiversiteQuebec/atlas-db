@@ -1,5 +1,5 @@
-DROP VIEW IF EXISTS api.observations CASCADE;
-CREATE VIEW api.observations AS (
+-- DROP VIEW IF EXISTS api.observations;
+CREATE OR REPLACE VIEW api.observations AS (
 	select
 		obs.id,
 		obs.geom,
