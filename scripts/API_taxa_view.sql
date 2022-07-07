@@ -12,9 +12,12 @@ CREATE OR REPLACE VIEW api.taxa AS (
 			   'source_scientific_name', taxa_ref.scientific_name)
 			   ) as source_references
 		from taxa_obs_ref_lookup obs_lookup
+		join taxa_obs_group_lookup qc_lookup
+			on obs_lookup.id_taxa_obs = qc_lookup.id_taxa_obs
         left join taxa_obs on obs_lookup.id_taxa_obs = taxa_obs.id
 		left join taxa_ref on obs_lookup.id_taxa_ref_valid = taxa_ref.id
 		where obs_lookup.match_type is not null
+			and qc_lookup.id_group = 20
 		group by (obs_lookup.id_taxa_obs, taxa_ref.scientific_name, taxa_ref.rank)
 	), obs_group as (
 		select
@@ -58,7 +61,7 @@ CREATE OR REPLACE VIEW api.taxa AS (
 		group by vernacular_all.id_taxa_obs
 	)
 	select
-		distinct on (obs_ref.id_taxa_obs, obs_ref.valid_scientific_name)
+		distinct on (obs_ref.id_taxa_obs)
 		obs_ref.id_taxa_obs,
         obs_ref.observed_scientific_name,
 		obs_ref.valid_scientific_name,
@@ -94,12 +97,23 @@ $$ LANGUAGE SQL STABLE;
 CREATE OR REPLACE FUNCTION api.taxa_autocomplete(
     name text)
 RETURNS json AS $$
-    SELECT json_agg(DISTINCT(matched_name))
+	with qc_taxa_obs as 
+		(
+			select id_taxa_obs id from taxa_obs_group_lookup
+			where id_group = 20
+		)
+	SELECT json_agg(DISTINCT(matched_name))
     FROM (
         (
-            select scientific_name matched_name from taxa_ref
+            select taxa_ref.scientific_name matched_name
+			from qc_taxa_obs, taxa_obs_ref_lookup ref_lu, taxa_ref
+			where qc_taxa_obs.id = ref_lu.id_taxa_obs
+				and ref_lu.id_taxa_ref = taxa_ref.id
         ) UNION (
-            select name matched_name from taxa_vernacular
+            select taxa_vernacular.name matched_name
+			from taxa_vernacular, taxa_obs_vernacular_lookup v_lu, qc_taxa_obs
+			where qc_taxa_obs.id = v_lu.id_taxa_obs
+				and v_lu.id_taxa_vernacular = taxa_vernacular.id
         )
     ) taxa
     WHERE LOWER(matched_name) like '%' || LOWER(name)

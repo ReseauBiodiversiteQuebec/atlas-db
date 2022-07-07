@@ -108,3 +108,38 @@ ALTER TABLE public.observations
 ALTER TABLE public.observations
     ATTACH PARTITION observations_partitions.outside_quebec
     FOR VALUES IN (FALSE);
+
+
+-- 5. ----------------------------------------------------------
+--  ADD CONSTRAINTS
+
+ALTER TABLE observations_partitions.within_quebec
+ADD CONSTRAINT within_quebec_unique_id UNIQUE (id);
+
+ALTER TABLE observations_partitions.outside_quebec
+ADD CONSTRAINT outside_quebec_unique_id UNIQUE (id);
+
+-- 6. ----------------------------------------------------------
+--  ADD TRIGGER FOR INSERTIONS
+
+CREATE OR REPLACE FUNCTION observations_set_within_quebec_trigger()
+RETURNS TRIGGER AS
+$$
+BEGIN
+	SELECT
+		bool_or(ST_WITHIN(NEW.geom, qc_region_limit.wkb_geometry))
+	INTO NEW.within_quebec
+	FROM qc_region_limit;
+
+    IF (NEW.within_quebec IS TRUE) THEN
+        INSERT INTO observations_partitions.within_quebec VALUES (NEW.*);
+    ELSE
+        INSERT INTO observations_partitions.outside_quebec VALUES (NEW.*);
+    END IF;
+	RETURN NULL;
+END;
+$$ language plpgsql;
+
+CREATE TRIGGER observations_set_within_quebec 
+BEFORE INSERT on public.observations
+	FOR EACH ROW EXECUTE FUNCTION observations_set_within_quebec_trigger();

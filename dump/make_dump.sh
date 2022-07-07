@@ -6,7 +6,8 @@ ecozones_file="dump_ecozones.sql"
 obs_file="dump_test_observations.sql"
 
 # Dump users and roles
-echo "SET session_replication_role = 'replica';" > $out_file 
+echo "SET session_replication_role = 'replica';" > $out_file
+
 pg_dumpall --roles-only >> $out_file
 
 grep -v "CREATE ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
@@ -20,12 +21,8 @@ pg_dump -a \
     -T public.observations_backup_202111 \
     -T public_api.hex_250_na \
     -T public_api.hexquebec      \
-    -T public_api.hexquebec100km \
-    -T public_api.hexquebec10km  \
-    -T public_api.hexquebec20km  \
-    -T public_api.hexquebec50km  \
-    -T public_api.hexquebec5km   \
     -T public_api.cadre_eco_quebec \
+    -T public.montreal_terrestrial_limits \
     -N scratch_vbeaure   \
     -N observations_partitions \
     >> $out_file
