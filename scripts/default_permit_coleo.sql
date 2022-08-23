@@ -28,7 +28,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO read_onl
 ALTER DEFAULT PRIVILEGES IN SCHEMA api GRANT SELECT ON TABLES TO read_only_all;
 ALTER DEFAULT PRIVILEGES IN SCHEMA api GRANT USAGE ON SEQUENCES TO read_only_all;
 ALTER DEFAULT PRIVILEGES IN SCHEMA api GRANT EXECUTE ON FUNCTIONS TO read_only_all;
-
+GRANT USAGE ON SCHEMA api TO read_only_all;
 
 
 ---grant full access to read_write role except delete (only postgres user can remove)-----
