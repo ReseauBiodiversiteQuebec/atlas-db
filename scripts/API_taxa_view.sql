@@ -143,3 +143,14 @@ FROM
 	public.match_taxa_obs(_input.taxa_name) match_t
 WHERE id_taxa_obs = match_t.id
 $$ LANGUAGE SQL STABLE;
+
+
+CREATE FUNCTION api.match_taxa(taxa_name text) RETURNS SETOF api.taxa
+    LANGUAGE sql STABLE
+    AS $$
+SELECT t.* FROM api.taxa t, public.match_taxa_obs(taxa_name) match_t
+WHERE id_taxa_obs = match_t.id
+$$;
+
+
+ALTER FUNCTION api.match_taxa(taxa_name text) OWNER TO postgres;
