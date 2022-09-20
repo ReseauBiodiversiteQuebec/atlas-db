@@ -59,6 +59,8 @@ COPY public.taxa_groups (id, vernacular_fr, vernacular_en, level) FROM stdin;
 16	Algues	Algae	1
 17	Bryophytes	Bryophytes	1
 18	Autres plantes	Other plants	1
+19	Toutes les espèces	All species	0
+20  Québec  Quebec  2
 \.
 
 
@@ -150,6 +152,8 @@ COPY public.taxa_group_members (id_group, scientific_name) FROM stdin;
 
 SELECT pg_catalog.setval('public.taxa_group_members_id_group_seq', 1, false);
 
+CREATE INDEX IF NOT EXISTS id_taxa_obs_idx
+  ON public.taxa_obs_ref_lookup (id_taxa_obs);
 
 --
 -- PostgreSQL database dump complete
@@ -169,3 +173,7 @@ CREATE VIEW public.taxa_obs_group_lookup AS (
     left join public.taxa_obs_ref_lookup obs_lookup
 	    on taxa_ref.id = obs_lookup.id_taxa_ref
 );
+
+ALTER TABLE taxa_groups add column source_desc text;
+
+ALTER TABLE taxa_group_members add unique (id_group, scientific_name);

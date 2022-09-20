@@ -1,5 +1,5 @@
-DROP VIEW if exists api.taxa CASCADE;
-CREATE VIEW api.taxa AS (
+-- DROP VIEW if exists api.taxa CASCADE;
+CREATE OR REPLACE VIEW api.taxa AS (
 	with obs_ref as (
 		select
 			obs_lookup.id_taxa_obs,
@@ -8,21 +8,33 @@ CREATE VIEW api.taxa AS (
 			taxa_ref.rank,
 			json_agg(json_build_object(
 			   'source_name', taxa_ref.source_name,
-			   'source_taxon_key', taxa_ref.source_record_id)) as source_references
+			   'source_taxon_key', taxa_ref.source_record_id,
+			   'source_scientific_name', taxa_ref.scientific_name)
+			   ) as source_references
 		from taxa_obs_ref_lookup obs_lookup
+		join taxa_obs_group_lookup qc_lookup
+			on obs_lookup.id_taxa_obs = qc_lookup.id_taxa_obs
         left join taxa_obs on obs_lookup.id_taxa_obs = taxa_obs.id
 		left join taxa_ref on obs_lookup.id_taxa_ref_valid = taxa_ref.id
 		where obs_lookup.match_type is not null
+			and qc_lookup.id_group = 20
 		group by (obs_lookup.id_taxa_obs, taxa_ref.scientific_name, taxa_ref.rank)
 	), obs_group as (
 		select
-			distinct on (group_lookup.id_taxa_obs)
 			group_lookup.id_taxa_obs,
 			taxa_groups.vernacular_en as group_en,
 			taxa_groups.vernacular_fr as group_fr
 		from taxa_obs_group_lookup group_lookup
 		left join taxa_groups on group_lookup.id_group = taxa_groups.id
 		where taxa_groups.level = 1
+	), status_group as (
+		SELECT
+			group_lookup.id_taxa_obs,
+			taxa_groups.vernacular_en as vernacular_en,
+			taxa_groups.vernacular_fr as vernacular_fr
+		from taxa_obs_group_lookup group_lookup
+		left join taxa_groups on group_lookup.id_group = taxa_groups.id
+		where taxa_groups.id = ANY (ARRAY[21, 22, 23, 24])
 	), vernacular_all as(
 		select v_lookup.id_taxa_obs, taxa_vernacular.*
 		from taxa_obs_vernacular_lookup v_lookup
@@ -49,7 +61,7 @@ CREATE VIEW api.taxa AS (
 		group by vernacular_all.id_taxa_obs
 	)
 	select
-		distinct on (obs_ref.id_taxa_obs, obs_ref.valid_scientific_name)
+		distinct on (obs_ref.id_taxa_obs)
 		obs_ref.id_taxa_obs,
         obs_ref.observed_scientific_name,
 		obs_ref.valid_scientific_name,
@@ -58,40 +70,87 @@ CREATE VIEW api.taxa AS (
 		best_vernacular.vernacular_fr,
 		obs_group.group_en,
 		obs_group.group_fr,
+		status_group.vernacular_fr qc_status_fr,
+		status_group.vernacular_en qc_status_en,
 		vernacular_group.vernacular,
 		obs_ref.source_references
-	from obs_ref
-	left join vernacular_group
-		on obs_ref.id_taxa_obs = vernacular_group.id_taxa_obs
-	left join obs_group
-		on obs_ref.id_taxa_obs = obs_group.id_taxa_obs
-	left join best_vernacular
-		on obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
+	from
+		obs_ref
+	LEFT JOIN vernacular_group ON obs_ref.id_taxa_obs = vernacular_group.id_taxa_obs
+	LEFT JOIN obs_group ON obs_ref.id_taxa_obs = obs_group.id_taxa_obs
+	LEFT JOIN status_group ON obs_ref.id_taxa_obs = status_group.id_taxa_obs
+	LEFT JOIN best_vernacular ON obs_ref.id_taxa_obs = best_vernacular.id_taxa_obs
 	ORDER BY obs_ref.id_taxa_obs, obs_ref.valid_scientific_name,
         best_vernacular.vernacular_en NULLS LAST
 );
 
-DROP FUNCTION if exists api.match_taxa CASCADE;
-CREATE FUNCTION api.match_taxa (taxa_name TEXT)
+-- DROP FUNCTION if exists api.match_taxa CASCADE;
+CREATE OR REPLACE FUNCTION api.match_taxa (taxa_name TEXT)
 RETURNS SETOF api.taxa
 AS $$
-SELECT * FROM api.taxa
-WHERE id_taxa_obs IN (select id from public.match_taxa_obs(taxa_name));
+SELECT t.* FROM api.taxa t, public.match_taxa_obs(taxa_name) match_t
+WHERE id_taxa_obs = match_t.id
 $$ LANGUAGE SQL STABLE;
 
 -- Autocomplete taxa_name
-DROP FUNCTION IF EXISTS api.taxa_autocomplete (text);
-CREATE FUNCTION api.taxa_autocomplete(
+-- DROP FUNCTION IF EXISTS api.taxa_autocomplete (text);
+CREATE OR REPLACE FUNCTION api.taxa_autocomplete(
     name text)
 RETURNS json AS $$
-    SELECT json_agg(DISTINCT(matched_name))
+	with qc_taxa_obs as 
+		(
+			select id_taxa_obs id from taxa_obs_group_lookup
+			where id_group = 20
+		)
+	SELECT json_agg(DISTINCT(matched_name))
     FROM (
         (
-            select scientific_name matched_name from taxa_ref
+            select taxa_ref.scientific_name matched_name
+			from qc_taxa_obs, taxa_obs_ref_lookup ref_lu, taxa_ref
+			where qc_taxa_obs.id = ref_lu.id_taxa_obs
+				and ref_lu.id_taxa_ref = taxa_ref.id
         ) UNION (
-            select name matched_name from taxa_vernacular
+            select taxa_vernacular.name matched_name
+			from taxa_vernacular, taxa_obs_vernacular_lookup v_lu, qc_taxa_obs
+			where qc_taxa_obs.id = v_lu.id_taxa_obs
+				and v_lu.id_taxa_vernacular = taxa_vernacular.id
         )
     ) taxa
-    WHERE LOWER(name) like '%' || LOWER(name)
-		OR LOWER(name) like LOWER(name) || '%';
+    WHERE LOWER(matched_name) like '%' || LOWER(name)
+		OR LOWER(matched_name) like LOWER(name) || '%';
 $$ LANGUAGE sql STABLE;
+
+
+CREATE OR REPLACE FUNCTION api.get_taxa_groups(taxa_keys integer[]) RETURNS SETOF api.taxa
+    LANGUAGE sql STABLE
+    AS $$
+SELECT *
+	FROM api.taxa
+	WHERE id_taxa_obs = ANY(taxa_keys);
+$$;
+
+
+CREATE OR REPLACE FUNCTION api.match_taxa_list (taxa_names TEXT[])
+RETURNS SETOF api.taxa
+AS $$
+with _input as (
+	SELECT unnest(taxa_names) taxa_name
+)
+SELECT t.*
+FROM
+	(SELECT unnest(taxa_names) taxa_name) _input,
+	api.taxa t,
+	public.match_taxa_obs(_input.taxa_name) match_t
+WHERE id_taxa_obs = match_t.id
+$$ LANGUAGE SQL STABLE;
+
+
+CREATE FUNCTION api.match_taxa(taxa_name text) RETURNS SETOF api.taxa
+    LANGUAGE sql STABLE
+    AS $$
+SELECT t.* FROM api.taxa t, public.match_taxa_obs(taxa_name) match_t
+WHERE id_taxa_obs = match_t.id
+$$;
+
+
+ALTER FUNCTION api.match_taxa(taxa_name text) OWNER TO postgres;

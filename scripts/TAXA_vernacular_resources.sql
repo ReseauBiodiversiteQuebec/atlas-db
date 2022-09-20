@@ -169,3 +169,21 @@ $BODY$
 LANGUAGE 'plpgsql';
 
 select insert_taxa_vernacular_from_obs(2072);
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- % TRIGGER insert_taxa_vernacular_from_obs
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+DROP FUNCTION IF EXISTS taxa_insert_vernacular();
+CREATE FUNCTION taxa_insert_vernacular()
+RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM insert_taxa_vernacular_from_obs(NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE PLPGSQL;
+
+CREATE TRIGGER taxa_insert_vernacular_trggr
+AFTER INSERT ON public.taxa_obs
+FOR EACH ROW
+EXECUTE PROCEDURE taxa_insert_vernacular();

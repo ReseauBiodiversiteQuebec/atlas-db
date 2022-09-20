@@ -1,10 +1,11 @@
-DROP TABLE IF EXISTS public.time_series CASCADE;
+-- DROP TABLE IF EXISTS public.time_series CASCADE;
 
 CREATE TABLE IF NOT EXISTS public.time_series (
   id SERIAL PRIMARY KEY,
   id_datasets integer NOT NULL,
   dataset_record_id integer,
-  id_taxa integer NOT NULL,
+  id_taxa integer,
+  id_taxa_obs integer,
   unit text,
   years integer[],
   values numeric [],

@@ -1,5 +1,5 @@
-DROP VIEW IF EXISTS api.observations CASCADE;
-CREATE VIEW api.observations AS (
+-- DROP VIEW IF EXISTS api.observations;
+CREATE OR REPLACE VIEW api.observations AS (
 	select
 		obs.id,
 		obs.geom,
@@ -8,6 +8,7 @@ CREATE VIEW api.observations AS (
 		obs.day_obs,
 		obs.time_obs,
 		obs.obs_value as value,
+		obs.within_quebec,
 		var.name as variable,
 		var.unit as variable_unit,
 		obs.id_taxa_obs,
