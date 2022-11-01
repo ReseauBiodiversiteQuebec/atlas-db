@@ -80,12 +80,12 @@ COPY public.taxa_group_members (id_group, scientific_name) FROM stdin;
 2	Aves
 3	Mammalia
 4	Reptilia
-5	Actinopterygii
 5	Cephalaspidomorphi
+5	Myxini
 5	Elasmobranchii
 5	Holocephali
-5	Myxini
-5	Sarcopterygii
+5	Actinopterygii
+5	Coelacanthiformes
 6	Appendicularia
 6	Ascidiacea
 6	Thaliacea
