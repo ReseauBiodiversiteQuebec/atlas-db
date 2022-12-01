@@ -10,8 +10,8 @@
 ------------------------------------------------------------------------------
 -- 1. CREATE ecozones OBS COUNT PER TAXA + YEAR MATERIALIZED VIEW
 ------------------------------------------------------------------------------
-    DROP MATERIALIZED VIEW IF EXISTS public_api.ecozones_taxa_year_obs_count CASCADE;
-    CREATE MATERIALIZED VIEW public_api.ecozones_taxa_year_obs_count AS
+    -- DROP MATERIALIZED VIEW IF EXISTS public_api.ecozones_taxa_year_obs_count CASCADE;
+    CREATE MATERIALIZED VIEW IF NOT EXISTS public_api.ecozones_taxa_year_obs_count AS
         SELECT
             ecozones.fid,
             ecozones.niv,
@@ -36,8 +36,8 @@
 ------------------------------------------------------------------------------
 -- 2. CREATE ecozones OBS COUNT PER TAXA_GROUP + YEAR MATERIALIZED VIEW
 ------------------------------------------------------------------------------
-    DROP MATERIALIZED VIEW IF EXISTS public_api.ecozones_taxagroup_year_obs_count CASCADE;
-    CREATE MATERIALIZED VIEW public_api.ecozones_taxagroup_year_obs_count AS
+    -- DROP MATERIALIZED VIEW IF EXISTS public_api.ecozones_taxagroup_year_obs_count CASCADE;
+    CREATE MATERIALIZED VIEW IF NOT EXISTS public_api.ecozones_taxagroup_year_obs_count AS
         SELECT
             mv.fid,
             mv.niv,
@@ -64,11 +64,11 @@
 ------------------------------------------------------------------------------
 
 
-    DROP FUNCTION IF EXISTS public_api.get_ecozone_counts(
-        integer, numeric, numeric, numeric, numeric, integer[], integer
-    );
-    CREATE FUNCTION public_api.get_ecozone_counts(
-        level integer,
+    -- DROP FUNCTION IF EXISTS public_api.get_ecozone_counts(
+    --     integer, numeric, numeric, numeric, numeric, integer[], integer
+    -- );
+    CREATE OR REPLACE FUNCTION public_api.get_ecozone_counts(
+        level integer as _level,
         minx numeric,
         maxx numeric,
         miny numeric,
@@ -80,7 +80,7 @@
         out_collection json;
     BEGIN
         IF (taxa_group_key IS NULL AND taxa_keys IS NULL) THEN
-            taxa_group_key := (SELECT id from taxa_groups where level = 0);
+            taxa_group_key := (SELECT id from taxa_groups where _level = 0);
         END IF;
         IF (taxa_group_key IS NOT NULL AND taxa_keys IS NOT NULL) THEN
             RAISE 'ONLY one of parameters `taxa_group_keys` or `taxa_keys` can be specified';
