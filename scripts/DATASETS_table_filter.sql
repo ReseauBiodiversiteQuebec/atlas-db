@@ -23,6 +23,7 @@ CREATE INDEX
     ON public_api.obs_datasets_taxa_count (id_datasets);
 
 
+-- DROP FUNCTION IF EXISTS public_api.list_datasets_summary(integer[], taxagroupkey)
 CREATE OR REPLACE FUNCTION public_api.list_datasets_summary(
     taxakeys integer[] DEFAULT NULL,
     taxagroupkey integer DEFAULT NULL)

@@ -1,4 +1,4 @@
-DROP FUNCTION IF EXISTS public_api.list_species(integer[]);
+-- DROP FUNCTION IF EXISTS public_api.list_species(integer[]);
 CREATE OR REPLACE FUNCTION public_api.list_species(taxakeys integer[])
 RETURNS TABLE (
 	id_taxa_obs integer[],

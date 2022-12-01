@@ -1,5 +1,5 @@
-DROP FUNCTION IF EXISTS public_api.taxa_quebec_count(integer[]);
-CREATE FUNCTION public_api.taxa_quebec_count(
+-- DROP FUNCTION IF EXISTS public_api.taxa_quebec_count(integer[]);
+CREATE OR REPLACE FUNCTION public_api.taxa_quebec_count(
 	taxa_keys integer[])
 RETURNS integer AS $$
 	SELECT sum(count_obs)
