@@ -1,5 +1,5 @@
-DROP VIEW IF EXISTS api.taxa_groups CASCADE;
-CREATE VIEW api.taxa_groups AS (
+-- DROP VIEW IF EXISTS api.taxa_groups CASCADE;
+CREATE OR REPLACE VIEW api.taxa_groups AS (
     with taxa_obs_agg as (
         select
             id_group,
@@ -18,4 +18,4 @@ CREATE VIEW api.taxa_groups AS (
         taxa_groups
     left join taxa_obs_agg on taxa_groups.id = taxa_obs_agg.id_group
     order by taxa_groups.level, taxa_groups.id
-)
+);
