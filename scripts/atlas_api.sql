@@ -636,3 +636,60 @@ EXPLAIN ANALYZE SELECT * FROM atlas_api.obs_dataset_summary(region_fid => 855385
     EXPLAIN ANALYZE select * from atlas_api.obs_taxa_list(region_fid => 855385, region_type => 'hex', min_year => 1950, max_year => 2022);
 
     EXPLAIN ANALYZE select * from atlas_api.obs_taxa_list(region_fid => 855385, region_type => 'hex', taxa_keys => ARRAY[10037], min_year => 1950, max_year => 2022);
+
+-- ---------------------------------------------------------------------------
+-- CREATE FUNCTION obs_species_summary to download species summary for a given fid, taxa_keys, taxa_group_key, min_year, max_year
+-- ---------------------------------------------------------------------------
+    DROP FUNCTION atlas_api.obs_species_summary(integer,integer,text,integer,integer);
+    CREATE OR REPLACE FUNCTION atlas_api.obs_species_summary(
+        taxa_key integer,
+        region_fid integer DEFAULT NULL::integer,
+        region_type text DEFAULT NULL::text,
+        min_year integer DEFAULT 0,
+        max_year integer DEFAULT 9999
+    )
+    RETURNS json AS $$
+    DECLARE out json;
+    BEGIN
+        IF (region_fid IS NULL) THEN
+            region_fid := (SELECT regions.fid from regions where regions.type = 'admin' and regions.scale = 1);
+            region_type := 'admin';
+        END IF;
+        WITH taxa as (
+            SELECT
+                valid_scientific_name,
+                vernacular_en,
+                vernacular_fr
+            FROM api.taxa
+            WHERE id_taxa_obs = $1
+        ), counts as (
+            SELECT
+                sum(counts.count_obs) as obs_count
+            FROM atlas_api.temp_obs_regions_taxa_year_counts counts
+            WHERE counts.fid = $2
+                AND counts.type = $3
+                AND counts.id_taxa_obs = $1
+                AND counts.year_obs >= $4
+                AND counts.year_obs <= $5
+        ), taxa_groups as (
+            SELECT
+                array_agg(vernacular_fr) as groups_fr,
+                array_agg(vernacular_en) as groups_en
+            FROM match_taxa_groups(ARRAY[$1])
+            WHERE level = 1 OR
+                source_desc = 'CDPNQ'
+        ), attributes as (
+            SELECT
+                taxa.*,
+                counts.obs_count,
+                taxa_groups.*
+            FROM taxa, counts, taxa_groups
+        )
+        SELECT row_to_json(attributes)
+        FROM attributes
+        INTO out;
+        RETURN out;
+    END;
+    $$ LANGUAGE plpgsql STABLE;
+
+    EXPLAIN ANALYZE select * from atlas_api.obs_species_summary(6525);
