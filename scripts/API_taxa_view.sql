@@ -49,10 +49,12 @@ CREATE OR REPLACE VIEW api.taxa AS (
 			taxa_ref.source_name,
 			source_priority,
 			taxa_ref.source_record_id source_taxon_key
-		from taxa_obs_ref_lookup obs_lookup
+		FROM taxa_obs_group_lookup
+		JOIN taxa_obs_ref_lookup obs_lookup USING (id_taxa_obs)
 		left join taxa_ref on obs_lookup.id_taxa_ref_valid = taxa_ref.id
 		JOIN api.taxa_ref_sources USING (source_id)
-		WHERE obs_lookup.match_type is not null
+		WHERE taxa_obs_group_lookup.short_group = 'ALL_SPECIES'
+			AND obs_lookup.match_type is not null
 			AND obs_lookup.match_type != 'complex'
 		ORDER BY obs_lookup.id_taxa_obs, source_priority
 	), agg_ref as (
@@ -153,7 +155,7 @@ RETURNS json AS $$
 	with qc_taxa_obs as 
 		(
 			select id_taxa_obs id from taxa_obs_group_lookup
-			where id_group = 20
+			where short_group = 'ALL_SPECIES'
 		)
 	SELECT json_agg(DISTINCT(matched_name))
     FROM (

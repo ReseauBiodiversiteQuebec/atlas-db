@@ -62,47 +62,47 @@
         ('cadre_eco', 'Cadre écologique', 'Ecological framework', 3, 7, TRUE),
         ('cadre_eco', 'Cadre écologique', 'Ecological framework', 4, 9, FALSE);
 
-CREATE INDEX IF NOT EXISTS regions_zoom_lookup_type_idx ON atlas_api.regions_zoom_lookup (type);
+    CREATE INDEX IF NOT EXISTS regions_zoom_lookup_type_idx ON atlas_api.regions_zoom_lookup (type);
 
-CREATE INDEX IF NOT EXISTS regions_zoom_lookup_zoom_idx ON atlas_api.regions_zoom_lookup (zoom);
+    CREATE INDEX IF NOT EXISTS regions_zoom_lookup_zoom_idx ON atlas_api.regions_zoom_lookup (zoom);
 
-CREATE INDEX IF NOT EXISTS regions_zoom_lookup_show_sensitive_idx ON atlas_api.regions_zoom_lookup (show_sensitive);
+    CREATE INDEX IF NOT EXISTS regions_zoom_lookup_show_sensitive_idx ON atlas_api.regions_zoom_lookup (show_sensitive);
 
-    CREATE OR REPLACE VIEW atlas_api.region_types AS
-    SELECT DISTINCT type, name_en, name_fr
-    FROM atlas_api.regions_zoom_lookup
-    WHERE "type" in ('admin', 'hex', 'cadre_eco');
-
-    -- CREATE FUNCTION to get the scale for a given region type and zoom level
-    CREATE OR REPLACE FUNCTION atlas_api.get_scale(type text, zoom integer, is_sensitive boolean)
-    RETURNS integer AS $$
-    DECLARE
-        best_scale integer;
-        lower_scale integer;
-    BEGIN
-        SELECT scale
-        INTO best_scale
+        CREATE OR REPLACE VIEW atlas_api.region_types AS
+        SELECT DISTINCT type, name_en, name_fr
         FROM atlas_api.regions_zoom_lookup
-        WHERE
-            regions_zoom_lookup.type = $1
-            AND regions_zoom_lookup.zoom <= $2
-            AND (show_sensitive IS TRUE OR $3 IS FALSE)
-        ORDER BY regions_zoom_lookup.zoom DESC
-        LIMIT 1;
+        WHERE "type" in ('admin', 'hex', 'cadre_eco');
 
-        SELECT scale
-        INTO lower_scale
-        FROM atlas_api.regions_zoom_lookup
-        WHERE regions_zoom_lookup.type = $1
-        ORDER BY regions_zoom_lookup.zoom ASC
-        LIMIT 1;
+        -- CREATE FUNCTION to get the scale for a given region type and zoom level
+        CREATE OR REPLACE FUNCTION atlas_api.get_scale(type text, zoom integer, is_sensitive boolean)
+        RETURNS integer AS $$
+        DECLARE
+            best_scale integer;
+            lower_scale integer;
+        BEGIN
+            SELECT scale
+            INTO best_scale
+            FROM atlas_api.regions_zoom_lookup
+            WHERE
+                regions_zoom_lookup.type = $1
+                AND regions_zoom_lookup.zoom <= $2
+                AND (show_sensitive IS TRUE OR $3 IS FALSE)
+            ORDER BY regions_zoom_lookup.zoom DESC
+            LIMIT 1;
 
-        RETURN CASE WHEN best_scale IS NULL THEN lower_scale ELSE best_scale END;
-    END;
-    $$ LANGUAGE plpgsql;
+            SELECT scale
+            INTO lower_scale
+            FROM atlas_api.regions_zoom_lookup
+            WHERE regions_zoom_lookup.type = $1
+            ORDER BY regions_zoom_lookup.zoom ASC
+            LIMIT 1;
 
-    -- TEST FUNCTION
-    SELECT atlas_api.get_scale('hex', 8, false);
+            RETURN CASE WHEN best_scale IS NULL THEN lower_scale ELSE best_scale END;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        -- TEST FUNCTION
+        SELECT atlas_api.get_scale('hex', 8, false);
 
 
 -- ----------------------------------------------------------------------------
@@ -158,7 +158,7 @@ CREATE INDEX IF NOT EXISTS regions_zoom_lookup_show_sensitive_idx ON atlas_api.r
 
     CREATE INDEX web_regions_scale_idx ON atlas_api.web_regions (scale);
 
-CREATE INDEX web_regions_type_scale_idx ON atlas_api.web_regions (type, scale);
+    CREATE INDEX web_regions_type_scale_idx ON atlas_api.web_regions (type, scale);
 
 
 
@@ -187,43 +187,43 @@ CREATE INDEX web_regions_type_scale_idx ON atlas_api.web_regions (type, scale);
 
     -- CREATE INDEX ON THE MATERIALIZED VIEW
 
-CREATE INDEX counts_type_fid_idx
-    ON atlas_api.counts (type, fid);
+    CREATE INDEX counts_type_fid_idx
+        ON atlas_api.counts (type, fid);
 
-CREATE INDEX counts_fid_idx
-    ON atlas_api.counts (fid);
+    CREATE INDEX counts_fid_idx
+        ON atlas_api.counts (fid);
 
-CREATE INDEX counts_type_idx
-    ON atlas_api.counts (type);
+    CREATE INDEX counts_type_idx
+        ON atlas_api.counts (type);
 
-CREATE INDEX counts_year_obs_idx
-    ON atlas_api.counts (year_obs);
+    CREATE INDEX counts_year_obs_idx
+        ON atlas_api.counts (year_obs);
 
-CREATE INDEX counts_id_taxa_obs_idx
-    ON atlas_api.counts (id_taxa_obs);
+    CREATE INDEX counts_id_taxa_obs_idx
+        ON atlas_api.counts (id_taxa_obs);
 
-CREATE TABLE atlas_api.temp_obs_regions_taxa_year_counts AS 
-SELECT counts.*, regions.scale FROM atlas_api.counts counts, regions
-WHERE regions.fid = counts.fid
-	AND regions.type in ('hex', 'cadre_eco');
+    CREATE TABLE atlas_api.temp_obs_regions_taxa_year_counts AS 
+    SELECT counts.*, regions.scale FROM atlas_api.counts counts, regions
+    WHERE regions.fid = counts.fid
+        AND regions.type in ('hex', 'cadre_eco');
 
-CREATE INDEX temp_obs_regions_taxa_year_counts_type_scale_idx
-    ON atlas_api.temp_obs_regions_taxa_year_counts (type, scale);
+    CREATE INDEX temp_obs_regions_taxa_year_counts_type_scale_idx
+        ON atlas_api.temp_obs_regions_taxa_year_counts (type, scale);
 
-CREATE INDEX temp_obs_regions_taxa_year_counts_type_idx
-    ON atlas_api.temp_obs_regions_taxa_year_counts (type);
+    CREATE INDEX temp_obs_regions_taxa_year_counts_type_idx
+        ON atlas_api.temp_obs_regions_taxa_year_counts (type);
 
-CREATE INDEX temp_obs_regions_taxa_year_counts_scale_idx
-    ON atlas_api.temp_obs_regions_taxa_year_counts (scale);
+    CREATE INDEX temp_obs_regions_taxa_year_counts_scale_idx
+        ON atlas_api.temp_obs_regions_taxa_year_counts (scale);
 
-CREATE INDEX temp_obs_regions_taxa_year_counts_year_obs_idx
-    ON atlas_api.temp_obs_regions_taxa_year_counts (year_obs);
+    CREATE INDEX temp_obs_regions_taxa_year_counts_year_obs_idx
+        ON atlas_api.temp_obs_regions_taxa_year_counts (year_obs);
 
-CREATE INDEX temp_obs_regions_taxa_year_counts_id_taxa_obs_idx
-    ON atlas_api.temp_obs_regions_taxa_year_counts (id_taxa_obs);
+    CREATE INDEX temp_obs_regions_taxa_year_counts_id_taxa_obs_idx
+        ON atlas_api.temp_obs_regions_taxa_year_counts (id_taxa_obs);
 
-CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
-    ON atlas_api.temp_obs_regions_taxa_year_counts (fid);
+    CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
+        ON atlas_api.temp_obs_regions_taxa_year_counts (fid);
 
 
 
@@ -267,7 +267,7 @@ CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
                 FROM taxa
                 LEFT JOIN (
                     SELECT * FROM taxa_obs_group_lookup
-                    WHERE id_group = 31
+                    WHERE short_group = 'SENSITIVE'
                 ) as sensitive_group USING (id_taxa_obs)
             ), scale as (
                 select atlas_api.get_scale(region_type, $2, sensitive) as scale
@@ -396,7 +396,7 @@ CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
                 SELECT UNNEST(taxa_list) as id_taxa_obs FROM obs_counts
                 ) as taxa
             LEFT JOIN (
-                    select id_taxa_obs, id_group as sensitive_group from taxa_obs_group_lookup where id_group = 31
+                    select id_taxa_obs, id_group as sensitive_group from taxa_obs_group_lookup where short_group = 'SENSITIVE'
                 ) as sensitive_group ON sensitive_group.id_taxa_obs = taxa.id_taxa_obs
             JOIN region_type_scale ON true
             WHERE (show_sensitive is false and sensitive_group is not null) is false
@@ -493,6 +493,7 @@ CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
         dataset text,
         dataset_publisher text,
         dataset_creator text,
+        dataset_doi text,
         count_obs integer,
         count_species integer,
         first_year integer,
@@ -523,6 +524,7 @@ CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
             min(d.title) AS dataset,
             min(d.publisher) AS dataset_publisher,
             min(d.creator) AS dataset_creator,
+            min(d.doi) AS dataset_doi,
             sum(counts.count_obs)::integer AS count_obs,
             array_length(api.taxa_branch_tips(counts.id_taxa_obs), 1) AS count_species,
             min(counts.min_year) AS first_year,
@@ -550,20 +552,20 @@ CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
     END;
     $$ LANGUAGE plpgsql STABLE;
 
-SELECT * FROM atlas_api.obs_dataset_summary(region_fid => 855385, region_type => 'hex', min_year => 1950, max_year => 2022);
+    SELECT * FROM atlas_api.obs_dataset_summary(region_fid => 855385, region_type => 'hex', min_year => 1950, max_year => 2022);
 
-EXPLAIN ANALYZE
-with taxa as (
-	select array_agg(id) ids from match_taxa_obs('Acer')
-)
-SELECT atlas_api.obs_dataset_summary(
-	region_fid => 855385, taxa_keys => ids, region_type => 'hex', min_year => 1950, max_year => 2022
-)
-FROM taxa;
+    EXPLAIN ANALYZE
+    with taxa as (
+        select array_agg(id) ids from match_taxa_obs('Acer')
+    )
+    SELECT atlas_api.obs_dataset_summary(
+        region_fid => 855385, taxa_keys => ids, region_type => 'hex', min_year => 1950, max_year => 2022
+    )
+    FROM taxa;
 
-EXPLAIN ANALYZE SELECT * FROM atlas_api.obs_dataset_summary(region_fid => NULL, region_type => 'hex', min_year => 1950, max_year => 2022);
+    EXPLAIN ANALYZE SELECT * FROM atlas_api.obs_dataset_summary(region_fid => NULL, region_type => 'hex', min_year => 1950, max_year => 2022);
 
-EXPLAIN ANALYZE SELECT * FROM atlas_api.obs_dataset_summary(region_fid => 855385, region_type => 'hex', min_year => 1950, max_year => 2022);
+    EXPLAIN ANALYZE SELECT * FROM atlas_api.obs_dataset_summary(region_fid => 855385, region_type => 'hex', min_year => 1950, max_year => 2022);
 
 
 -- ---------------------------------------------------------------------------
@@ -619,7 +621,7 @@ EXPLAIN ANALYZE SELECT * FROM atlas_api.obs_dataset_summary(region_fid => 855385
                 SELECT UNNEST(taxa_list) as id_taxa_obs FROM obs_taxa
                 ) as taxa
             LEFT JOIN (
-                    select id_taxa_obs, id_group as sensitive_group from taxa_obs_group_lookup where id_group = 31
+                    select id_taxa_obs, id_group as sensitive_group from taxa_obs_group_lookup where short_group = 'SENSITIVE'
                 ) as sensitive_group ON sensitive_group.id_taxa_obs = taxa.id_taxa_obs
             JOIN region_type_scale ON true
             WHERE (show_sensitive is false and sensitive_group is not null) is false

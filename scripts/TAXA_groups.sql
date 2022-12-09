@@ -47,17 +47,16 @@ OTHER_GYMNOSPERMS	15	Autres gymnospermes	Other gymnosperms	1	NULL
 ALGAE	16	Algues	Algae	1	NULL
 BRYOPHYTES	17	Bryophytes	Bryophytes	1	NULL
 OTHER_PLANTS	18	Autres plantes	Other plants	1	NULL
-QUEBEC	20	Québec	Quebec	2	NULL
 ALL_SPECIES	19	Toutes les espèces	All species	0	NULL
-INVASIVE_SPECIES	25	Espèces envahissantes	Invasive species	2	NULL
+INVASIVE_SPECIES	25	Espèce envahissante	Invasive species	2	CDPNQ
 CDPNQ_SUSC	21	Espèce susceptible		2	CDPNQ
 CDPNQ_VUL	22	Espèce vulnérable		2	CDPNQ
 CDPNQ_VUL_HARVEST	23	Espèce vulnérable à la récolte		2	CDPNQ
 CDPNQ_ENDANGERED	24	Espèce menacée		2	CDPNQ
-CDPNQ_S1	27	S1	S1	2	CDPNQ
-CDPNQ_S2	28	S2	S2	2	CDPNQ
-CDPNQ_S3	29	S3	S3	2	CDPNQ
-SENSITIVE	31	Espèces sensibles	Sensitive species	2	CDPNQ
+CDPNQ_S1	27	Rang S1	S1 Rank	2	CDPNQ
+CDPNQ_S2	28	Rang S2	S2 Rank	2	CDPNQ
+CDPNQ_S3	29	Rang S3	S3 Rank	2	CDPNQ
+SENSITIVE	31	Espèce sensibles	Sensitive species	2	CDPNQ
 \.
 
 INSERT INTO public.taxa_group_members (short, id, vernacular_fr, vernacular_en, level, groups_within)
@@ -679,15 +678,15 @@ CREATE MATERIALIZED VIEW public.taxa_obs_group_lookup AS (
         where taxa_groups.level = ANY(ARRAY[1, 2])
     )
     select
-        id_taxa_obs, id_group
+        id_taxa_obs, id_group, short short_group
     from level_1_2_lookup
     UNION
     SELECT distinct on (id_taxa_obs)
-        id_taxa_obs, taxa_groups.id id_group
+        id_taxa_obs, taxa_groups.id id_group, short short_group
     FROM observations_partitions.within_quebec, taxa_groups
     WHERE level = 0
     UNION
-    SELECT id_taxa_obs, level_3_groups.id id_group
+    SELECT id_taxa_obs, level_3_groups.id id_group, level_3_groups.short short_group
     FROM taxa_groups as level_3_groups, level_1_2_lookup
     WHERE level_3_groups.level = 3
         AND level_1_2_lookup.short = ANY(level_3_groups.groups_within)
@@ -699,3 +698,6 @@ CREATE INDEX IF NOT EXISTS taxa_obs_group_lookup_id_taxa_obs_idx
 
 CREATE INDEX IF NOT EXISTS taxa_obs_group_lookup_id_group_idx
     ON public.taxa_obs_group_lookup (id_group);
+
+CREATE INDEX IF NOT EXISTS taxa_obs_group_lookup_short_group_idx
+    ON public.taxa_obs_group_lookup (short_group);
