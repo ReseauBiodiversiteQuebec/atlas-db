@@ -697,3 +697,70 @@
     $$ LANGUAGE plpgsql STABLE;
 
     EXPLAIN ANALYZE select * from atlas_api.obs_species_summary(6525);
+
+
+-- ---------------------------------------------------------------------------
+-- CREATE FUNCTION get_year_counts to download number of observations
+------------------------------------------------------------------------------
+    -- DROP FUNCTION IF EXISTS atlas_api.get_year_counts(
+    --     integer[], integer
+    -- );
+    CREATE OR REPLACE FUNCTION atlas_api.get_year_counts(
+        taxaKeys integer[] DEFAULT NULL,
+        taxaGroupKey integer DEFAULT NULL)
+    RETURNS json AS $$
+    DECLARE
+        out_json json;
+        region_fid integer;
+    BEGIN
+        IF (taxaGroupKey IS NULL AND taxaKeys IS NULL) THEN
+            taxaGroupKey := (SELECT id from taxa_groups where level = 0);
+        END IF;
+        IF (taxaGroupKey IS NOT NULL AND taxaKeys IS NOT NULL) THEN
+            RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
+        END IF;
+        region_fid := (SELECT regions.fid from regions where regions.type = 'admin' and regions.scale = 1);
+        WITH year_counts as (
+            SELECT
+                    o.year_obs as year,
+                    sum(o.count_obs) count_obs,
+                    count(distinct(o.id_taxa_obs)) count_species
+                FROM atlas_api.temp_obs_regions_taxa_year_counts o
+                WHERE o.fid = region_fid
+                    AND o.id_taxa_obs = ANY(taxaKeys)
+                GROUP BY o.year_obs
+            UNION
+            SELECT
+                    o.year_obs as year,
+                    sum(o.count_obs) count_obs,
+                    count(distinct(o.id_taxa_obs)) count_species
+                FROM atlas_api.temp_obs_regions_taxa_year_counts o,
+                    taxa_obs_group_lookup glu
+                WHERE o.fid = region_fid
+                    AND glu.id_group = taxaGroupKey
+                    AND glu.id_taxa_obs = o.id_taxa_obs
+                GROUP BY o.year_obs
+        ), year_range as (
+            select
+                generate_series(
+                    1950,
+                    max(year_obs)
+                ) as year
+            from atlas_api.temp_obs_regions_taxa_year_counts	
+        ), all_year_counts as (
+            SELECT
+                year_range.year,
+                coalesce(year_counts.count_obs, 0) count_obs,
+                coalesce(year_counts.count_species, 0) count_species
+            FROM year_range
+            LEFT JOIN year_counts on year_range.year = year_counts.year
+            ORDER BY year_range.year
+        )
+        SELECT
+            json_agg(all_year_counts.*)
+            INTO out_json
+            FROM all_year_counts;
+        RETURN out_json;
+    END;
+    $$ LANGUAGE plpgsql STABLE;
+    EXPLAIN ANALYZE SELECT atlas_api.get_year_counts(NULL, 2);
