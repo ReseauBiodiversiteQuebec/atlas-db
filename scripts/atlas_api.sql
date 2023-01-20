@@ -110,7 +110,7 @@
 -- The simplification is done using the ST_SimplifyPreserveTopology function
 -- using a value computed from the zoom level scale of the region
 -- The zoom level scale is defined in the regions_zoom_lookup table
--- ----------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------```
 
     DROP MATERIALIZED VIEW IF EXISTS atlas_api.web_regions;
     CREATE MATERIALIZED VIEW atlas_api.web_regions AS
@@ -152,7 +152,7 @@
     -- CREATE INDEX ON THE MATERIALIZED VIEW
     CREATE INDEX web_regions_geom_idx ON atlas_api.web_regions USING GIST (geom);
 
-    CREATE INDEX web_regions_fid_idx ON atlas_api.web_regions (fid);
+    CREATE UNIQUE INDEX web_regions_fid_idx ON atlas_api.web_regions (fid);
 
     CREATE INDEX web_regions_type_idx ON atlas_api.web_regions (type);
 
@@ -160,15 +160,14 @@
 
     CREATE INDEX web_regions_type_scale_idx ON atlas_api.web_regions (type, scale);
 
-
-
 -- -----------------------------------------------------------------------------
 -- CREATE MATERIALIZED VIEW FOR counts
 -- -----------------------------------------------------------------------------
-    DROP MATERIALIZED VIEW IF EXISTS atlas_api.counts;
-    CREATE MATERIALIZED VIEW IF NOT EXISTS atlas_api.counts AS
+     IF EXISTS atlas_api.obs_region_counts;
+    CREATE MATERIALIZED VIEW IF NOT EXISTS atlas_api.obs_region_counts AS
     SELECT
         regions.type,
+        regions.scale,
         regions.fid,
         o.id_taxa_obs,
         o.year_obs,
@@ -181,51 +180,33 @@
     WHERE st_within(o.geom, regions.geom)
         AND o.within_quebec = regions.within_quebec
         AND regions.type = regions_zoom_lookup.type AND regions.scale = regions_zoom_lookup.scale
+        AND regions.type in ('hex', 'cadre_eco', 'admin')
     GROUP BY regions.type, regions.fid, o.id_taxa_obs, o.year_obs
     WITH DATA;
 
 
     -- CREATE INDEX ON THE MATERIALIZED VIEW
 
-    CREATE INDEX counts_type_fid_idx
-        ON atlas_api.counts (type, fid);
+    CREATE INDEX obs_region_counts_type_fid_idx
+        ON atlas_api.obs_region_counts (type, fid);
 
-    CREATE INDEX counts_fid_idx
-        ON atlas_api.counts (fid);
+    CREATE INDEX obs_region_counts_type_scale_idx
+        ON atlas_api.obs_region_counts (type, scale);
 
-    CREATE INDEX counts_type_idx
-        ON atlas_api.counts (type);
+    CREATE INDEX obs_region_counts_fid_idx
+        ON atlas_api.obs_region_counts (fid);
 
-    CREATE INDEX counts_year_obs_idx
-        ON atlas_api.counts (year_obs);
+    CREATE INDEX obs_region_counts_type_idx
+        ON atlas_api.obs_region_counts (type);
 
-    CREATE INDEX counts_id_taxa_obs_idx
-        ON atlas_api.counts (id_taxa_obs);
+    CREATE INDEX obs_region_counts_year_obs_idx
+        ON atlas_api.obs_region_counts (year_obs);
 
-    CREATE TABLE atlas_api.temp_obs_regions_taxa_year_counts AS 
-    SELECT counts.*, regions.scale FROM atlas_api.counts counts, regions
-    WHERE regions.fid = counts.fid
-        AND regions.type in ('hex', 'cadre_eco');
+    CREATE INDEX obs_region_counts_id_taxa_obs_idx
+        ON atlas_api.obs_region_counts (id_taxa_obs);
 
-    CREATE INDEX temp_obs_regions_taxa_year_counts_type_scale_idx
-        ON atlas_api.temp_obs_regions_taxa_year_counts (type, scale);
-
-    CREATE INDEX temp_obs_regions_taxa_year_counts_type_idx
-        ON atlas_api.temp_obs_regions_taxa_year_counts (type);
-
-    CREATE INDEX temp_obs_regions_taxa_year_counts_scale_idx
-        ON atlas_api.temp_obs_regions_taxa_year_counts (scale);
-
-    CREATE INDEX temp_obs_regions_taxa_year_counts_year_obs_idx
-        ON atlas_api.temp_obs_regions_taxa_year_counts (year_obs);
-
-    CREATE INDEX temp_obs_regions_taxa_year_counts_id_taxa_obs_idx
-        ON atlas_api.temp_obs_regions_taxa_year_counts (id_taxa_obs);
-
-    CREATE INDEX temp_obs_regions_taxa_year_counts_fid_idx
-        ON atlas_api.temp_obs_regions_taxa_year_counts (fid);
-
-
+    CREATE UNIQUE INDEX obs_region_counts_type_fid_id_taxa_obs_year_obs_idx
+        ON atlas_api.obs_region_counts (fid, id_taxa_obs, year_obs);
 
 -- -----------------------------------------------------------------------------
 -- CREATE FUNCTION obs_map to return tile x, y and zoom for a given region type, zoom, y, x with summary of observations
@@ -295,7 +276,7 @@
                     fid,
                     count(distinct(id_taxa_obs)) AS count_species,
                     sum(count_obs) AS count_obs
-                FROM atlas_api.temp_obs_regions_taxa_year_counts counts 
+                FROM atlas_api.obs_region_counts counts 
                 JOIN taxa using (id_taxa_obs)
                 WHERE type = region_type and scale = (select scale from scale)
                     AND year_obs >= $9 and year_obs <= $10
@@ -382,7 +363,7 @@
                 counts.type,
                 api.taxa_branch_tips(counts.id_taxa_obs) AS taxa_list,
                 sum(counts.count_obs) AS count_obs
-            FROM atlas_api.temp_obs_regions_taxa_year_counts counts, taxa
+            FROM atlas_api.obs_region_counts counts, taxa
             WHERE counts.fid = $1
                 AND counts.type = $2
                 AND counts.id_taxa_obs = taxa.id_taxa_obs
@@ -436,7 +417,7 @@
     EXPLAIN ANALYZE select * from atlas_api.obs_summary(region_fid => 855385, region_type => 'hex', taxa_keys => ARRAY[10037], min_year => 1950, max_year => 2022);
     
 -- ---------------------------------------------------------------------------
--- CREATE MATERIALIZED VIEW FOR regions_obs_taxa_datasets_counts
+-- CREATE MATERIALIZED VIEW FOR obs_regions_taxa_datasets_counts
 -- -----------------------------------------------------------------------------
     DROP MATERIALIZED VIEW IF EXISTS atlas_api.obs_regions_taxa_datasets_counts;
     CREATE MATERIALIZED VIEW IF NOT EXISTS atlas_api.obs_regions_taxa_datasets_counts AS
@@ -477,6 +458,9 @@
 
     CREATE INDEX obs_regions_taxa_datasets_counts_max_year_idx
         ON atlas_api.obs_regions_taxa_datasets_counts (max_year);
+
+    CREATE UNIQUE INDEX obs_regions_taxa_datasets_counts_fid_id_taxa_obs_id_datasets_idx
+        ON atlas_api.obs_regions_taxa_datasets_counts (fid, id_taxa_obs, id_datasets);
 
 -- -----------------------------------------------------------------------------
 -- CREATE FUNCTION TO RETURN THE obs_datasets for a given region fid, taxa_id, min_year and max_year
@@ -609,7 +593,7 @@
         ), obs_taxa as (
             SELECT
                 api.taxa_branch_tips(counts.id_taxa_obs) AS taxa_list
-            FROM atlas_api.temp_obs_regions_taxa_year_counts counts, taxa
+            FROM atlas_api.obs_region_counts counts, taxa
             WHERE counts.fid = $1
                 AND counts.type = $2
                 AND counts.id_taxa_obs = taxa.id_taxa_obs
@@ -669,7 +653,7 @@
         ), counts as (
             SELECT
                 sum(counts.count_obs) as obs_count
-            FROM atlas_api.temp_obs_regions_taxa_year_counts counts
+            FROM atlas_api.obs_region_counts counts
             WHERE counts.fid = $2
                 AND counts.type = $3
                 AND counts.id_taxa_obs = $1
@@ -725,7 +709,7 @@
                     o.year_obs as year,
                     sum(o.count_obs) count_obs,
                     count(distinct(o.id_taxa_obs)) count_species
-                FROM atlas_api.temp_obs_regions_taxa_year_counts o
+                FROM atlas_api.obs_region_counts o
                 WHERE o.fid = region_fid
                     AND o.id_taxa_obs = ANY(taxaKeys)
                 GROUP BY o.year_obs
@@ -734,7 +718,7 @@
                     o.year_obs as year,
                     sum(o.count_obs) count_obs,
                     count(distinct(o.id_taxa_obs)) count_species
-                FROM atlas_api.temp_obs_regions_taxa_year_counts o,
+                FROM atlas_api.obs_region_counts o,
                     taxa_obs_group_lookup glu
                 WHERE o.fid = region_fid
                     AND glu.id_group = taxaGroupKey
@@ -746,7 +730,7 @@
                     1950,
                     max(year_obs)
                 ) as year
-            from atlas_api.temp_obs_regions_taxa_year_counts	
+            from atlas_api.obs_region_counts	
         ), all_year_counts as (
             SELECT
                 year_range.year,
