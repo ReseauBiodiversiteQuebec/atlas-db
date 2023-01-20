@@ -543,8 +543,8 @@
             counts.fid = $1
             AND counts.type = $2
             AND counts.id_taxa_obs = taxa.id_taxa_obs
-            AND counts.min_year >= $5
-            AND counts.max_year <= $6
+            AND counts.min_year <= $6
+            AND counts.max_year >= $5
             AND counts.id_datasets = d.id
             AND tg_out_lu.id_taxa_obs = counts.id_taxa_obs
             AND tg_out_lu.id_group = tg_out.id
