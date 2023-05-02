@@ -23,9 +23,19 @@
 
     ALTER DEFAULT PRIVILEGES IN SCHEMA atlas_api GRANT EXECUTE ON FUNCTIONS TO read_only_all;
 
+    -- GRANT SELECT ON ALL TABLES, SEQUENCES, AND VIEWS IN SCHEMA atlas_api TO read_only_public;
+
+
+
     GRANT SELECT ON ALL TABLES IN SCHEMA atlas_api TO read_only_public;
 
+    GRANT SELECT ON ALL SEQUENCES IN SCHEMA atlas_api TO read_only_public;
+
     GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA atlas_api TO read_only_public;
+
+    GRANT read_only_public TO read_only_all;
+
+    GRANT read_only_public TO read_write_all;
 
 -- -----------------------------------------------------------------------------
 -- CREATE TABLE for regions
