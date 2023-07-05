@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS plpython3u;
 
 -- CREATE FUNCTION TO ACCESS REFERENCE TAXA FROM GLOBAL NAMES
 DROP FUNCTION IF EXISTS public.match_taxa_sources(text, text);
-CREATE FUNCTION public.match_taxa_sources(
+CREATE OR REPLACE FUNCTION public.match_taxa_sources(
     name text,
     name_authorship text DEFAULT NULL)
 RETURNS TABLE (
@@ -23,6 +23,12 @@ RETURNS TABLE (
 LANGUAGE plpython3u
 AS $function$
 from bdqc_taxa.taxa_ref import TaxaRef
+import plpy
+try:
+  return TaxaRef.from_all_sources(name, name_authorship)
+except Exception as e:
+  plpy.notice(f'Failed to match_taxa_sources: {name} {name_authorship}')
+  raise Exception(e)
 out = TaxaRef.from_all_sources(name, name_authorship)
 return out
 $function$;
@@ -195,6 +201,11 @@ BEGIN
         NEW.id, NEW.scientific_name, NEW.authorship
         );
     RETURN NEW;
+Exception
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error in trigger_insert_taxa_ref_from_obs: (%, %, %)', NEW.id, NEW.scientific_name, NEW.authorship;
+        RAISE NOTICE '%', SQLERRM;
+        RETURN NEW;
 END;
 $$ LANGUAGE 'plpgsql';
 

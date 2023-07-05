@@ -1,5 +1,5 @@
-DROP FUNCTION IF EXISTS public_api.list_species(integer[]);
-CREATE OR REPLACE FUNCTION public_api.list_species(taxakeys integer[])
+-- DROP FUNCTION IF EXISTS atlas_api.list_species(integer[]);
+CREATE OR REPLACE FUNCTION atlas_api.list_species(taxakeys integer[])
 RETURNS TABLE (
 	id_taxa_obs integer[],
 	valid_scientific_name text,
