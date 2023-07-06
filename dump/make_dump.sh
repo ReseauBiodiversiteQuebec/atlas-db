@@ -12,9 +12,15 @@ grep -v "CREATE ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 grep -v "ALTER ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 
 # Dump using -s to dump only schema and -a to dump only data
+echo "Dumping schema and data..."
 pg_dump -s --no-tablespaces \
+    -n public \
+    -n public_api \
+    -n atlas_api \
+    -n api \
     >> $out_file
-pg_dump -a --if-exists\
+
+pg_dump -a \
     -n public \
     -n public_api \
     -n atlas_api \
@@ -25,9 +31,14 @@ pg_dump -a --if-exists\
     -T public.regions \
     -T qc_limit \
     -T qc_region_limit \
+    -T public.cdpnq_ranges \
+    -T atlas_api.temp_obs_regions_taxa_year_counts \
+    -T public.time_series \
     >> $out_file
+echo "...done"
 
 # Dump selected observations in 'test_observations.txt' file and add line to copy in sql dump
+echo "Dumping test observations..."
 echo "SET session_replication_role = 'replica';" > $obs_file 
 psql -c 'create table public.test_observations (like public.observations including all);
 
@@ -55,6 +66,9 @@ echo "\.">>$obs_file
 psql -c "drop table test_observations;"
 
 # Dump regions of type hex in dump_regions_hex.sql
+echo "Dumping regions..."
+echo "...dumping hex regions..."
+
 echo "SET session_replication_role = 'replica';" > dump_regions_hex.sql
 echo "COPY public.regions FROM stdin;">>dump_regions_hex.sql
 psql -c '
@@ -66,6 +80,7 @@ TO stdout'>>dump_regions_hex.sql
 echo "\.">>dump_regions_hex.sql
 
 # Dump regions of type cadre_eco in dump_regions_cadre_eco.sql
+echo "...dumping cadre_eco regions..."
 echo "SET session_replication_role = 'replica';" > dump_regions_cadre_eco.sql
 echo "COPY public.regions FROM stdin;">>dump_regions_cadre_eco.sql
 psql -c '
@@ -77,6 +92,7 @@ TO stdout'>>dump_regions_cadre_eco.sql
 echo "\.">>dump_regions_cadre_eco.sql
 
 # Dump regions of type hex in dump_regions_admin.sql
+echo "...dumping admin regions..."
 echo "SET session_replication_role = 'replica';" > dump_regions_admin.sql
 echo "COPY public.regions FROM stdin;">>dump_regions_admin.sql
 psql -c '
@@ -86,3 +102,4 @@ COPY (
     WHERE type = '\''admin'\'')
 TO stdout'>>dump_regions_admin.sql
 echo "\.">>dump_regions_admin.sql
+echo "...done"

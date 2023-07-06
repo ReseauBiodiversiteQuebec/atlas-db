@@ -9,9 +9,6 @@ RUN pip3 install git+https://github.com/ReseauBiodiversiteQuebec/bdqc_taxa.git#e
 
 COPY ./dump/dump_atlas.sql /docker-entrypoint-initdb.d/0_dump_atlas.sql
 COPY ./dump/dump_test_observations.sql /docker-entrypoint-initdb.d/1_dump_test_observations.sql
-COPY ./dump/dump_hex.sql /docker-entrypoint-initdb.d/2_dump_hex.sql
-<<<<<<< HEAD
-COPY ./dump/make_dump.sh /docker-entrypoint-initdb.d/make_dump.sh
-=======
->>>>>>> b7329f0f64ee7f0ab33334433462e4c35f48bacf
-
+COPY ./dump/dump_regions_admin.sql /docker-entrypoint-initdb.d/2_dump_regions_admin.sql
+COPY ./dump/dump_regions_cadre_eco.sql /docker-entrypoint-initdb.d/3_dump_regions_cadre_eco.sql
+COPY ./dump/dump_regions_hex.sql /docker-entrypoint-initdb.d/4_dump_regions_hex.sql
