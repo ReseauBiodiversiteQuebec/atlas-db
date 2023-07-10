@@ -43,8 +43,11 @@ ADD COLUMN dwc_event_date text NOT NULL DEFAULT '';
 -- 3. Update observations and set value of `dwc_event_date`
 -------------------------------------------------------------------------
 
+<<<<<<< HEAD
+=======
 -- IMPORTANT :  All triggers must be activated before doing that step
 
+>>>>>>> 9aab52c4bd5fcd92b2566300f5a67e43d02443a2
 UPDATE public.observations
 SET dwc_event_date = format_dwc_datetime(
 	year_obs,
@@ -57,6 +60,10 @@ SET dwc_event_date = format_dwc_datetime(
 -- 4. Find and remove doubles and implement constraint
 -------------------------------------------------------------------------
 
+<<<<<<< HEAD
+DROP TABLE IF EXISTS del_obs cascade;
+CREATE TEMPORARY TABLE del_obs AS
+=======
 CREATE INDEX observations_unique_rows 
 on observations (geom, dwc_event_date,id_taxa_obs, obs_value, id_variables,
 		within_quebec);
@@ -64,10 +71,25 @@ on observations (geom, dwc_event_date,id_taxa_obs, obs_value, id_variables,
 
 DROP TABLE IF EXISTS del_obs cascade;
 CREATE TABLE del_obs AS
+>>>>>>> 9aab52c4bd5fcd92b2566300f5a67e43d02443a2
 WITH kept_obs AS (
 	SELECT
 		max(id) id
 	FROM observations
+<<<<<<< HEAD
+	GROUP BY (geom, dwc_event_date, id_taxa_obs, obs_value, id_variables))
+select obs.id id_obs, obs_efforts.id_efforts
+from observations obs
+left join obs_efforts on obs.id = id_obs
+WHERE obs.id not in ( select id from kept_obs );
+DELETE FROM obs_efforts where id_obs in ( select id_obs from del_obs);
+DELETE FROM observations where id in ( select id_obs from del_obs);
+DELETE FROM efforts where id not in ( select id_efforts from obs_efforts);
+
+ALTER TABLE public.observations
+    ADD CONSTRAINT observations_unique_rows
+    UNIQUE (geom, dwc_event_date, id_taxa_obs, id_variables, obs_value);
+=======
 	GROUP BY (geom, dwc_event_date,id_taxa_obs, obs_value, id_variables,
 		within_quebec)
 )
@@ -84,6 +106,7 @@ ALTER TABLE public.observations
     ADD CONSTRAINT observations_unique_rows
     UNIQUE (geom, dwc_event_date,
 		id_taxa_obs, id_variables, obs_value, within_quebec);
+>>>>>>> 9aab52c4bd5fcd92b2566300f5a67e43d02443a2
 
 
 -------------------------------------------------------------------------

@@ -187,3 +187,35 @@ CREATE TRIGGER taxa_insert_vernacular_trggr
 AFTER INSERT ON public.taxa_obs
 FOR EACH ROW
 EXECUTE PROCEDURE taxa_insert_vernacular();
+
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- % FUNCTION refresh_taxa_vernacular
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+create or replace function taxa_vernacular_fix_caribou ()
+returns void as
+$$
+delete from taxa_obs_vernacular_lookup vlu
+using taxa_ref, taxa_obs_ref_lookup, taxa_vernacular, taxa_obs
+where taxa_ref.scientific_name <> 'Rangifer tarandus'
+	and taxa_obs.scientific_name <> 'Rangifer tarandus'
+	and taxa_ref.id = taxa_obs_ref_lookup.id_taxa_ref
+	and taxa_obs.id = taxa_obs_ref_lookup.id_taxa_obs
+	and taxa_vernacular.name = 'caribou'
+	and taxa_vernacular.id = vlu.id_taxa_vernacular
+	and vlu.id_taxa_obs = taxa_obs.id;
+$$ language sql;
+
+
+-- DROP FUNCTION IF EXISTS refresh_taxa_vernacular() CASCADE;
+CREATE OR REPLACE FUNCTION refresh_taxa_vernacular()
+RETURNS void AS
+$$
+BEGIN
+    DELETE FROM taxa_obs_vernacular_lookup;
+    DELETE FROM taxa_vernacular;
+    PERFORM insert_taxa_vernacular_from_obs(id) FROM taxa_obs;
+    PERFORM taxa_vernacular_fix_caribou();
+END;
+$$ LANGUAGE plpgsql;

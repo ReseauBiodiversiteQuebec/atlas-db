@@ -1,8 +1,6 @@
 export PGDATABASE="atlas"
 
 out_file="dump_atlas.sql"
-hex_file="dump_hex.sql"
-ecozones_file="dump_ecozones.sql"
 obs_file="dump_test_observations.sql"
 
 # Dump users and roles
@@ -13,36 +11,34 @@ pg_dumpall --roles-only >> $out_file
 grep -v "CREATE ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 grep -v "ALTER ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 
+# Dump using -s to dump only schema and -a to dump only data
+echo "Dumping schema and data..."
 pg_dump -s --no-tablespaces \
+    -n public \
+    -n public_api \
+    -n atlas_api \
+    -n api \
     >> $out_file
+
 pg_dump -a \
+    -n public \
+    -n public_api \
+    -n atlas_api \
+    -n api \
     -T observations \
     -T obs_efforts \
-    -T public.observations_backup_202111 \
-    -T public_api.hex_250_na \
-    -T public_api.hexquebec      \
-    -T public_api.cadre_eco_quebec \
     -T public.montreal_terrestrial_limits \
-    -N scratch_vbeaure   \
-    -N observations_partitions \
+    -T public.regions \
+    -T qc_limit \
+    -T qc_region_limit \
+    -T public.cdpnq_ranges \
+    -T atlas_api.temp_obs_regions_taxa_year_counts \
+    -T public.time_series \
     >> $out_file
-
-# DUMP hex data in a separate file for space under 100 Mb git management
-echo "SET session_replication_role = 'replica';" > $hex_file 
-
-pg_dump -c --if-exists\
-    -t public_api.hex_250_na     \
-    -t public_api.hexquebec      \
-    >> $hex_file
-
-
-echo "SET session_replication_role = 'replica';" > $ecozones_file 
-
-pg_dump -c --if-exists\
-    -t public_api.cadre_eco_quebec     \
-    >> $ecozones_file
+echo "...done"
 
 # Dump selected observations in 'test_observations.txt' file and add line to copy in sql dump
+echo "Dumping test observations..."
 echo "SET session_replication_role = 'replica';" > $obs_file 
 psql -c 'create table public.test_observations (like public.observations including all);
 
@@ -68,3 +64,42 @@ TO stdout'>>$obs_file
 echo "\.">>$obs_file
 
 psql -c "drop table test_observations;"
+
+# Dump regions of type hex in dump_regions_hex.sql
+echo "Dumping regions..."
+echo "...dumping hex regions..."
+
+echo "SET session_replication_role = 'replica';" > dump_regions_hex.sql
+echo "COPY public.regions FROM stdin;">>dump_regions_hex.sql
+psql -c '
+COPY (
+    SELECT *
+    FROM regions
+    WHERE type = '\''hex'\'')
+TO stdout'>>dump_regions_hex.sql
+echo "\.">>dump_regions_hex.sql
+
+# Dump regions of type cadre_eco in dump_regions_cadre_eco.sql
+echo "...dumping cadre_eco regions..."
+echo "SET session_replication_role = 'replica';" > dump_regions_cadre_eco.sql
+echo "COPY public.regions FROM stdin;">>dump_regions_cadre_eco.sql
+psql -c '
+COPY (
+    SELECT *
+    FROM regions
+    WHERE type = '\''cadre_eco'\'')
+TO stdout'>>dump_regions_cadre_eco.sql
+echo "\.">>dump_regions_cadre_eco.sql
+
+# Dump regions of type hex in dump_regions_admin.sql
+echo "...dumping admin regions..."
+echo "SET session_replication_role = 'replica';" > dump_regions_admin.sql
+echo "COPY public.regions FROM stdin;">>dump_regions_admin.sql
+psql -c '
+COPY (
+    SELECT *
+    FROM regions
+    WHERE type = '\''admin'\'')
+TO stdout'>>dump_regions_admin.sql
+echo "\.">>dump_regions_admin.sql
+echo "...done"

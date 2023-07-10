@@ -71,3 +71,24 @@ CREATE OR REPLACE VIEW list_valid_taxa AS
     LEFT JOIN public.taxa_ref taxa_ref on lookup.id_taxa_ref_valid = taxa_ref.id
     WHERE lookup.match_type is not null;
 
+-- -----------------------------------------------------------------------------
+-- FUNCTION match_taxa_groups
+-- -----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION match_taxa_groups(
+	id_taxa_obs integer[]
+)
+RETURNS SETOF taxa_groups AS $$
+	with group_id_taxa_obs as (
+		select
+			id_group,
+			array_agg(id_taxa_obs) id_taxa_obs
+		from taxa_obs_group_lookup
+		group by id_group
+	)
+	select taxa_groups.* from group_id_taxa_obs, taxa_groups
+	where $1 <@ id_taxa_obs
+		and id_group = taxa_groups.id
+$$ language sql;
+
+
