@@ -8,23 +8,29 @@ echo "SET session_replication_role = 'replica';" > $out_file
 
 pg_dumpall --roles-only >> $out_file
 
+# Add create extension postgis
+echo "CREATE EXTENSION postgis;" >> $out_file
+
+# Add create extension plpython3u
+echo "CREATE EXTENSION plpython3u;" >> $out_file
+
 grep -v "CREATE ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 grep -v "ALTER ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
 
 # Dump using -s to dump only schema and -a to dump only data
 echo "Dumping schema and data..."
-pg_dump -s --no-tablespaces \
+pg_dump -s -n observations_partitions \
     -n public \
+    -n api \
     -n public_api \
     -n atlas_api \
-    -n api \
     >> $out_file
 
 pg_dump -a \
     -n public \
+    -n api \
     -n public_api \
     -n atlas_api \
-    -n api \
     -T observations \
     -T obs_efforts \
     -T public.montreal_terrestrial_limits \
@@ -65,41 +71,6 @@ echo "\.">>$obs_file
 
 psql -c "drop table test_observations;"
 
-# Dump regions of type hex in dump_regions_hex.sql
+# Dump regions of type hex in dump_regions.sql
 echo "Dumping regions..."
-echo "...dumping hex regions..."
-
-echo "SET session_replication_role = 'replica';" > dump_regions_hex.sql
-echo "COPY public.regions FROM stdin;">>dump_regions_hex.sql
-psql -c '
-COPY (
-    SELECT *
-    FROM regions
-    WHERE type = '\''hex'\'')
-TO stdout'>>dump_regions_hex.sql
-echo "\.">>dump_regions_hex.sql
-
-# Dump regions of type cadre_eco in dump_regions_cadre_eco.sql
-echo "...dumping cadre_eco regions..."
-echo "SET session_replication_role = 'replica';" > dump_regions_cadre_eco.sql
-echo "COPY public.regions FROM stdin;">>dump_regions_cadre_eco.sql
-psql -c '
-COPY (
-    SELECT *
-    FROM regions
-    WHERE type = '\''cadre_eco'\'')
-TO stdout'>>dump_regions_cadre_eco.sql
-echo "\.">>dump_regions_cadre_eco.sql
-
-# Dump regions of type hex in dump_regions_admin.sql
-echo "...dumping admin regions..."
-echo "SET session_replication_role = 'replica';" > dump_regions_admin.sql
-echo "COPY public.regions FROM stdin;">>dump_regions_admin.sql
-psql -c '
-COPY (
-    SELECT *
-    FROM regions
-    WHERE type = '\''admin'\'')
-TO stdout'>>dump_regions_admin.sql
-echo "\.">>dump_regions_admin.sql
-echo "...done"
+pg_dump -a -t regions > dump_regions.sql
