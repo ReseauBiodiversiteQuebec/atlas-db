@@ -24,6 +24,7 @@ pg_dump -s -n observations_partitions \
     -n api \
     -n public_api \
     -n atlas_api \
+    -n data_transfer \
     >> $out_file
 
 pg_dump -a \
@@ -68,6 +69,17 @@ COPY (
         FROM test_observations obs))
 TO stdout'>>$obs_file
 echo "\.">>$obs_file
+
+# RESTART sequence for observations to avoid duplicate id
+echo """
+DO \$\$
+DECLARE
+    max_id INT;
+BEGIN
+    SELECT MAX(id) + 1 INTO max_id FROM observations;
+    EXECUTE 'ALTER SEQUENCE observations_partitions.observations_id_seq RESTART WITH ' || max_id;
+END \$\$;
+""" >> $obs_file
 
 psql -c "drop table test_observations;"
 
