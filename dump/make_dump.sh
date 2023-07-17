@@ -25,6 +25,7 @@ pg_dump -s -n observations_partitions \
     -n public_api \
     -n atlas_api \
     -n data_transfer \
+    -n observations_partitions \
     >> $out_file
 
 pg_dump -a \
