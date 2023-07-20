@@ -326,7 +326,7 @@
 -- -----------------------------------------------------------------------------
 -- CREATE FUNCTION obs_summary to return species and obs counts for a given fid, taxa_keys, taxa_group_key, min_year, max_year
 -- ---------------------------------------------------------------------------
-    DROP FUNCTION atlas_api.obs_summary(integer,text,integer[],integer,integer,integer);
+    -- DROP FUNCTION atlas_api.obs_summary(integer,text,integer[],integer,integer,integer);
     CREATE OR REPLACE FUNCTION atlas_api.obs_summary(
         region_fid integer DEFAULT NULL::integer,
         region_type text DEFAULT NULL::text,
@@ -413,10 +413,11 @@
                 -- subtitle is the string between parenthesis in the name field
                 'subtitle', regexp_replace(region_name, '^.+\((.+)\)$', '\1')
             ) AS region_filter_tags,
-            obs_counts.count_obs::integer,
-            array_length(obs_counts.taxa_list, 1)::integer as taxa_count,
+            coalesce(obs_counts.count_obs::integer, 0),
+            coalesce(array_length(obs_counts.taxa_list, 1)::integer, 0) as taxa_count,
             taxa_list.taxa_list
-        FROM region_type_scale, obs_counts, taxa_list, taxa_groups;
+        FROM region_type_scale, taxa_list, taxa_groups
+        LEFT JOIN obs_counts ON TRUE;
     END;
     $$ LANGUAGE plpgsql STABLE;
 
@@ -425,6 +426,9 @@
     EXPLAIN ANALYZE select * from atlas_api.obs_summary(region_fid => 855385, region_type => 'hex', min_year => 1950, max_year => 2022);
 
     EXPLAIN ANALYZE select * from atlas_api.obs_summary(region_fid => 855385, region_type => 'hex', taxa_keys => ARRAY[10037], min_year => 1950, max_year => 2022);
+
+    -- REGRESSION TEST FOR hex with empy observations
+    EXPLAIN ANALYZE select * from atlas_api.obs_summary(region_fid => 855580, region_type => 'hex', taxa_group_key => 19, min_year => 1950, max_year => 2022);
     
 -- ---------------------------------------------------------------------------
 -- CREATE MATERIALIZED VIEW FOR obs_regions_taxa_datasets_counts
