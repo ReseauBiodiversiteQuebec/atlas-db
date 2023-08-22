@@ -1,0 +1,69 @@
+-- Atlas api relies on a list of tables or materialized views that are generated
+-- from other tables. Those generated tables must be updated frequently.
+-- They also must be updated concurrently to not block usage of the database.
+
+-- This system relies on these ressources :
+-- - table named atlas_api.generated_tables_metadata that contains the list of generated tables and related metadata to update them
+-- - function named atlas_api.update_generated_tables that updates all generated tables and related metadata
+
+CREATE TABLE generated_tables_metadata (
+    id SERIAL PRIMARY KEY,
+    source_table_name TEXT NOT NULL,
+    source_table_last_modified_column TEXT NOT NULL DEFAULT 'modified_at',
+    source_table_last_modified TIMESTAMP,
+    generated_table_name TEXT NOT NULL,
+    generated_table_last_update TIMESTAMP NOT NULL,
+    update_statement TEXT NOT NULL,
+    status TEXT,
+    return_message TEXT
+);
+
+CREATE OR REPLACE FUNCTION update_generated_tables_metadata()
+RETURNS void AS $$
+DECLARE
+    generated_table RECORD;
+    source_table TEXT;
+    update_statement TEXT;
+    return_message TEXT;
+BEGIN
+    -- Update source tables last modified date
+    FOR source_table IN
+        SELECT DISTINCT source_table_name
+        FROM generated_tables_metadata
+    LOOP
+        EXECUTE format('UPDATE generated_tables_metadata SET source_table_last_modified = (SELECT MAX(%I) FROM %I) WHERE source_table_name = %L', source_table.source_table_last_modified_column, source_table.source_table_name, source_table.source_table_name);
+    END LOOP;
+
+    -- Update generated tables and last update date
+    -- Try updating using statement stored in generated_tables_metadata
+    -- If it fails, create warning and continue
+
+    FOR generated_table IN
+        SELECT
+            id,
+            generated_table_name,
+            max(source_table_last_modified) source_table_last_modified,
+            generated_table_last_update,
+            update_statement
+        FROM generated_tables_metadata
+        GROUP BY generated_table_name, generated_table_last_update, update_statement
+    LOOP
+        -- If generated table last update is before source table, update it
+        IF generated_table.generated_table_last_update < generated_table.source_table_last_modified THEN
+            BEGIN
+                -- STORE EXECUTE RESULT IN VARIABLE
+                EXECUTE generated_table.update_statement INTO return_message;
+                -- UPDATE GENERATED TABLE LAST UPDATE AND STATUS
+                EXECUTE format('UPDATE generated_tables_metadata SET generated_table_last_update = NOW(), status = %L, return_message = %L WHERE id = %L', 'success', return_message, generated_table.id);
+            EXCEPTION WHEN OTHERS THEN
+                -- UPDATE GENERATED TABLE STATUS AND RETURN MESSAGE
+                EXECUTE format('UPDATE generated_tables_metadata SET status = %L, return_message = %L WHERE id = %L', 'error', SQLERRM, generated_table.id);
+            END;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- INSERT GENERATED TABLES METADATA
+INSERT INTO generated_tables_metadata (generated_table_name, update_statement, source_table_name, source_table_last_modified_column)
+VALUES ('atlas_api.web_regions', 'REFRESH MATERIALIZED VIEW CONCURRENTLY atlas_api.web_regions;', 'public.regions', 'updated_at');
