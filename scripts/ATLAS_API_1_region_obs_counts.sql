@@ -192,13 +192,27 @@
         taxa_id_list integer[]
     )
     AS $$
+    DECLARE
+        region_type_fr text;
+        region_type_en text;
     BEGIN
+        -- Group is all species (level = 0) if no group
         IF (taxa_group_key IS NULL AND taxa_keys IS NULL) THEN
             taxa_group_key := (SELECT id from taxa_groups where level = 0);
         END IF;
+
+        -- Only one of taxa_group_key or taxa_keys can be specified
         IF (taxa_group_key IS NOT NULL AND taxa_keys IS NOT NULL) THEN
             RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
         END IF;
+
+        -- Set region_fid and region_type to default (all quebec) if not specified
+        -- We must first store region type tags that will be returned
+        SELECT name_fr, name_en INTO region_type_fr, region_type_en
+        FROM atlas_api.regions_zoom_lookup
+        WHERE type = region_type
+        LIMIT 1;
+
         IF (region_fid IS NULL) THEN
             region_fid := (SELECT regions.fid from regions where regions.type = 'admin' and regions.scale = 1);
             region_type := 'admin';
@@ -211,7 +225,11 @@
             FROM taxa_obs_group_lookup
             where id_group = taxa_group_key
         ), region_type_scale as (
-            select show_sensitive, name_fr, name_en, regions.name as region_name
+            select
+                show_sensitive,
+                region_type_fr as name_fr,
+                region_type_en as name_en,
+                regions.name as region_name
             from atlas_api.regions_zoom_lookup rlu, regions
             where regions.fid = region_fid and regions.type = region_type
                 and rlu.type = region_type and rlu.scale = regions.scale
@@ -402,3 +420,74 @@
     END;
     $$ LANGUAGE plpgsql STABLE;
     -- EXPLAIN ANALYZE SELECT atlas_api.get_year_counts(NULL, 2);
+
+-- ---------------------------------------------------------------------------
+-- CREATE FUNCTION obs_species_list to download species list for a given fid, taxa_keys, taxa_group_key, min_year, max_year
+-- -----------------------------------------------------------------------------
+    DROP FUNCTION atlas_api.obs_taxa_list(integer,text,integer[],integer,integer,integer);
+    CREATE OR REPLACE FUNCTION atlas_api.obs_taxa_list(
+        region_fid integer DEFAULT NULL::integer,
+        region_type text DEFAULT NULL::text,
+        taxa_keys integer[] DEFAULT NULL::integer[],
+        taxa_group_key integer DEFAULT NULL::integer,
+        min_year integer DEFAULT 0,
+        max_year integer DEFAULT 9999
+    )
+    RETURNS SETOF api.taxa AS $$
+    BEGIN
+        IF (taxa_group_key IS NULL AND taxa_keys IS NULL) THEN
+            taxa_group_key := (SELECT id from taxa_groups where level = 0);
+        END IF;
+        IF (taxa_group_key IS NOT NULL AND taxa_keys IS NOT NULL) THEN
+            RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
+        END IF;
+        IF (region_fid IS NULL) THEN
+            region_fid := (SELECT regions.fid from regions where regions.type = 'admin' and regions.scale = 1);
+            region_type := 'admin';
+        END IF;
+        RETURN QUERY
+        WITH taxa as (
+            SELECT UNNEST(taxa_keys) as id_taxa_obs
+            UNION
+            SELECT id_taxa_obs
+            FROM taxa_obs_group_lookup
+            where id_group = taxa_group_key
+        ), region_type_scale as (
+            select show_sensitive
+            from atlas_api.regions_zoom_lookup rlu, regions
+            where regions.fid = region_fid and regions.type = region_type
+                and rlu.type = region_type and rlu.scale = regions.scale
+        ), obs_taxa as (
+            SELECT
+                api.taxa_branch_tips(counts.id_taxa_obs) AS taxa_list
+            FROM atlas_api.obs_region_counts counts, taxa
+            WHERE counts.fid = $1
+                AND counts.type = $2
+                AND counts.id_taxa_obs = taxa.id_taxa_obs
+                AND counts.year_obs >= $5
+                AND counts.year_obs <= $6
+            GROUP BY counts.fid, counts.type
+        ), not_sensitive_taxa as (
+            SELECT
+                array_agg(taxa.id_taxa_obs) taxa_list
+            FROM (
+                SELECT UNNEST(taxa_list) as id_taxa_obs FROM obs_taxa
+                ) as taxa
+            LEFT JOIN (
+                    select id_taxa_obs, id_group as sensitive_group from taxa_obs_group_lookup where short_group = 'SENSITIVE'
+                ) as sensitive_group ON sensitive_group.id_taxa_obs = taxa.id_taxa_obs
+            JOIN region_type_scale ON true
+            WHERE (show_sensitive is false and sensitive_group is not null) is false
+        )
+        SELECT
+            taxa.*
+        FROM api.taxa, not_sensitive_taxa
+        WHERE taxa.id_taxa_obs = ANY (not_sensitive_taxa.taxa_list);
+    END;
+    $$ LANGUAGE plpgsql STABLE;
+
+    EXPLAIN ANALYZE select * from atlas_api.obs_taxa_list(region_fid => NULL, region_type => 'hex', min_year => 1950, max_year => 2022);
+
+    EXPLAIN ANALYZE select * from atlas_api.obs_taxa_list(region_fid => 855385, region_type => 'hex', min_year => 1950, max_year => 2022);
+
+    EXPLAIN ANALYZE select * from atlas_api.obs_taxa_list(region_fid => 855385, region_type => 'hex', taxa_keys => ARRAY[10037], min_year => 1950, max_year => 2022);
