@@ -211,22 +211,20 @@ DROP FUNCTION IF EXISTS api.taxa_branch_tips(integer[]);
 CREATE OR REPLACE FUNCTION api.taxa_branch_tips (
     taxa_obs_ids integer[]
 ) RETURNS integer[] AS $$
-    WITH sum_filterid_ref AS (
-        select
-            min(id_taxa_obs) id_taxa_obs,
-            id_taxa_ref_valid id_taxa_ref,
-            count(id_taxa_ref_valid) count_taxa_ref,
-            min(match_type) match_type
-        from taxa_obs_ref_lookup obs_lookup
-        WHERE (match_type != 'complex' or match_type is null)
-            AND obs_lookup.id_taxa_obs = any(taxa_obs_ids)
-        group by id_taxa_ref_valid
-    )
-    select
-        array_agg(distinct(sum_filterid_ref.id_taxa_obs)) id_taxa_obs
-    from sum_filterid_ref
-    where count_taxa_ref = 1
-        and match_type is not null
+	with nodes AS (
+		select
+			id_taxa_ref_valid,
+			bool_and((coalesce(match_type = 'complex_closest_parent', false) or is_parent is true) is false) is_tip,
+			min(id_taxa_obs) id_taxa_obs,
+			count(id_taxa_ref_valid) count_taxa_ref
+		from taxa_obs_ref_lookup obs_lookup
+		WHERE obs_lookup.id_taxa_obs = any(taxa_obs_ids)
+			and (match_type != 'complex' or match_type is null)
+		group by id_taxa_ref_valid
+	)
+	select array_agg(distinct(id_taxa_obs)) id
+	from nodes
+	where is_tip is true
 $$ LANGUAGE sql;
 
 CREATE OR REPLACE AGGREGATE api.taxa_branch_tips (integer) (
