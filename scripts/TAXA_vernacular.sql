@@ -9,12 +9,17 @@ CREATE TABLE public.taxa_vernacular (
     source_record_id text NOT NULL,
     name text NOT NULL,
     language text NOT NULL,
-    gbif_taxon_key text,
+    rank text,
+    rank_order integer not null default -1,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by text NOT NULL DEFAULT CURRENT_USER,
     UNIQUE (source_name, source_record_id, language)
 );
+
+-- alter default value  -1
+Alter table public.taxa_vernacular
+    alter column rank_order set default -1;
 
 CREATE INDEX IF NOT EXISTS taxa_vernacular_source_name_idx
   ON public.taxa_vernacular (source_name);
@@ -40,7 +45,6 @@ CREATE TABLE IF NOT EXISTS public.taxa_obs_vernacular_lookup (
     id_taxa_obs integer NOT NULL,
     id_taxa_vernacular integer NOT NULL,
     match_type text,
-    rank_order integer not null default 0,
     UNIQUE (id_taxa_obs, id_taxa_vernacular)
 );
 
@@ -61,7 +65,9 @@ RETURNS TABLE (
     source text,
     source_taxon_key text,
     name text,
-    language text
+    language text,
+    rank text,
+    rank_order integer
 )
 LANGUAGE plpython3u
 AS $function$
@@ -96,109 +102,109 @@ $function$;
 -- % FUNCTION insert_taxa_vernacular_from_obs
 -- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+DROP FUNCTION IF EXISTS public.insert_taxa_vernacular_using_ref(integer);
+CREATE OR REPLACE FUNCTION insert_taxa_vernacular_using_ref(id_taxa_ref integer)
+RETURNS void AS
+$BODY$
+DECLARE
+    scientific_name_rec record;
+BEGIN
+    CREATE TEMPORARY TABLE distinct_taxa_ref as
+        select distinct on (scientific_name)
+            taxa_ref.id,
+            taxa_ref.scientific_name,
+            LOWER(taxa_ref.rank)
+        from taxa_ref
+        where taxa_ref.id = $1;
+
+    FOR scientific_name_rec IN
+        SELECT scientific_name FROM distinct_taxa_ref
+    LOOP
+        WITH related_taxa_obs as (
+            select
+                id_taxa_obs,
+                match_type
+            from taxa_obs_ref_lookup ref_lu, distinct_taxa_ref
+            where ref_lu.id_taxa_ref = distinct_taxa_ref.id
+        ), ins_taxa_vernacular as (
+            INSERT INTO taxa_vernacular (
+                source_name,
+                source_record_id,
+                name,
+                language,
+                rank,
+                rank_order
+            )
+            SELECT
+                source,
+                source_taxon_key,
+                name,
+                language,
+                rank,
+                rank_order
+            FROM taxa_vernacular_from_match(scientific_name_rec.scientific_name)
+            ON CONFLICT (source_name, source_record_id, language) DO NOTHING
+            RETURNING id as taxa_vernacular_id
+        )
+        INSERT INTO taxa_obs_vernacular_lookup (
+            id_taxa_obs,
+            id_taxa_vernacular,
+            match_type
+        )
+        SELECT
+            related_taxa_obs.id_taxa_obs,
+            ins_taxa_vernacular.taxa_vernacular_id,
+            coalesce(related_taxa_obs.match_type, 'parent')
+        FROM related_taxa_obs,
+            ins_taxa_vernacular
+        ON CONFLICT (id_taxa_obs, id_taxa_vernacular) DO NOTHING;
+    END LOOP;
+    DROP TABLE distinct_taxa_ref;
+END;
+$BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION insert_taxa_vernacular_using_all_ref()
+RETURNS void AS
+$$
+DECLARE
+    scientific_name_rec record;
+BEGIN
+    FOR scientific_name_rec IN
+        SELECT
+            distinct on (taxa_ref.scientific_name, taxa_ref.rank)
+            taxa_ref.id,
+            taxa_ref.scientific_name,
+            LOWER(taxa_ref.rank)
+        FROM taxa_ref
+    LOOP
+        BEGIN
+            PERFORM insert_taxa_vernacular_using_ref(scientific_name_rec.id);
+        EXCEPTION
+            WHEN OTHERS THEN
+                RAISE NOTICE 'insert_taxa_vernacular_using_ref(%s) failed for taxa (%s): %', scientific_name_rec.id, scientific_name_rec.scientific_name, SQLERRM;
+        END;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- select insert_taxa_vernacular_using_ref(273000);
+
+
 -- DROP FUNCTION IF EXISTS insert_taxa_vernacular_from_taxa_obs(integer) CASCADE;
 CREATE OR REPLACE FUNCTION insert_taxa_vernacular_from_taxa_obs(
     ins_taxa_obs_id integer
 )
 RETURNS void AS
 $BODY$
-BEGIN
-    WITH gbif_ref as (
-        select
-            taxa_obs.scientific_name as observed_scientific_name,
-            gbif_ref.scientific_name,
-            gbif_ref.source_record_id as gbif_taxon_key,
-            array_length(gbif_ref.classification_srids, 1) as rank_order,
-            ref_lu.match_type,
-            ref_lu.is_parent
-        from taxa_obs,
-            taxa_obs_ref_lookup ref_lu,
-            taxa_ref gbif_ref
-        where taxa_obs.id = ins_taxa_obs_id
-            and ref_lu.id_taxa_obs = taxa_obs.id
-            and ref_lu.id_taxa_ref = gbif_ref.id
-            and gbif_ref.source_name = 'GBIF Backbone Taxonomy'
-    ), vernacular_sources as (
-        -- UNION FROM GBIF PARENTS AND MATCHES
-        select
-            match.source,
-            match.source_taxon_key,
-            match.name,
-            match.language,
-            coalesce(gbif_ref.match_type, 'parent') as match_type,
-            gbif_ref.rank_order
-        from
-            gbif_ref,
-            public.taxa_vernacular_from_gbif(gbif_ref.gbif_taxon_key) match
-        where gbif_ref.is_parent = true
-        UNION
-        select
-            match.source,
-            match.source_taxon_key,
-            match.name,
-            match.language,
-            gbif_ref.match_type as match_type,
-            gbif_ref.rank_order
-        from
-            gbif_ref,
-            public.taxa_vernacular_from_match(gbif_ref.observed_scientific_name) match
-        where gbif_ref.is_parent = false
-    ), temp_vernacular as (
-        select
-            vernacular_sources.*,
-            taxa_vernacular.id as id_taxa_vernacular
-        from 
-            vernacular_sources
-        left join taxa_vernacular
-            on vernacular_sources.source = taxa_vernacular.source_name
-            and vernacular_sources.source_taxon_key = taxa_vernacular.source_record_id
-            and vernacular_sources.language = taxa_vernacular.language
-        where vernacular_sources.source is not null -- where a match is found
-    ), new_vernacular as (
-        INSERT INTO public.taxa_vernacular (
-            source_name,
-            source_record_id,
-            name,
-            language
-        )
-        SELECT
-            source,
-            source_taxon_key,
-            name,
-            language
-        FROM temp_vernacular
-        ON CONFLICT DO NOTHING
-        RETURNING
-            id as id_taxa_vernacular, source_name, source_record_id, language
-    ), temp_lookup as (
-        (
-            SELECT
-                new_vernacular.id_taxa_vernacular,
-                temp_vernacular.match_type,
-                temp_vernacular.rank_order
-            from new_vernacular
-            left join temp_vernacular
-                on new_vernacular.source_name = temp_vernacular.source
-                and new_vernacular.source_record_id = temp_vernacular.source_taxon_key
-                and new_vernacular.language = temp_vernacular.language
-        ) UNION (
-            SELECT id_taxa_vernacular, match_type, rank_order from temp_vernacular
-            where id_taxa_vernacular is not null
-        )
-    )
-    INSERT INTO public.taxa_obs_vernacular_lookup (
-        id_taxa_obs,
-        id_taxa_vernacular,
-        match_type,
-        rank_order
-    )
-    SELECT
-        ins_taxa_obs_id as id_taxa_obs, id_taxa_vernacular, match_type, rank_order
-    FROM temp_lookup
-    ON CONFLICT DO NOTHING;
-END;
-$BODY$
-LANGUAGE 'plpgsql';
+$$
+SELECT
+    distinct on (taxa_ref.scientific_name, taxa_ref.rank)
+    insert_taxa_vernacular_using_ref(taxa_ref.id)
+FROM taxa_ref, taxa_obs_ref_lookup
+WHERE taxa_obs_ref_lookup.id_taxa_obs = ins_taxa_obs_id
+    AND taxa_ref.id = taxa_obs_ref_lookup.id_taxa_ref;
+$$ LANGUAGE SQL;
 
 ------------------------------------------------------------------------
 -- FUNCTION refresh_taxa_vernacular
@@ -227,7 +233,7 @@ $$
 BEGIN
     DELETE FROM taxa_obs_vernacular_lookup;
     DELETE FROM taxa_vernacular;
-    PERFORM insert_taxa_vernacular_from_taxa_obs(id) FROM taxa_obs;
+    PERFORM insert_taxa_vernacular_using_all_ref() ;
     PERFORM taxa_vernacular_fix_caribou();
 END;
 $$ LANGUAGE plpgsql;
