@@ -47,14 +47,12 @@ CREATE OR REPLACE VIEW api.taxa AS (
 			taxa_ref.scientific_name valid_scientific_name,
 			taxa_ref.rank,
 			taxa_ref.source_name,
-			source_priority,
+			coalesce(source_priority, 9999) source_priority,
 			taxa_ref.source_record_id source_taxon_key
-		FROM taxa_obs_group_lookup
-		JOIN taxa_obs_ref_lookup obs_lookup USING (id_taxa_obs)
+		from taxa_obs_ref_lookup obs_lookup
 		left join taxa_ref on obs_lookup.id_taxa_ref_valid = taxa_ref.id
-		JOIN api.taxa_ref_sources USING (source_id)
-		WHERE taxa_obs_group_lookup.short_group = 'ALL_SPECIES'
-			AND obs_lookup.match_type is not null
+		left join api.taxa_ref_sources USING (source_id)
+		WHERE obs_lookup.match_type is not null
 			AND obs_lookup.match_type != 'complex'
 		ORDER BY obs_lookup.id_taxa_obs, source_priority
 	), agg_ref as (
@@ -85,19 +83,23 @@ CREATE OR REPLACE VIEW api.taxa AS (
 		left join taxa_groups on group_lookup.id_group = taxa_groups.id
 		where taxa_groups.level = 1
 	), vernacular_all as(
-		select v_lookup.id_taxa_obs, taxa_vernacular.*, coalesce(source_priority, 9999) source_priority
+		select
+			v_lookup.id_taxa_obs, taxa_vernacular.*,
+			coalesce(source_priority, 9999) source_priority,
+			match_type,
+			coalesce(taxa_vernacular.rank_order, -1) rank_order
 		from taxa_obs_vernacular_lookup v_lookup
 		left join taxa_vernacular on v_lookup.id_taxa_vernacular = taxa_vernacular.id
-		left join api.taxa_vernacular_sources USING (source_name)
-		where match_type is not null
-		order by v_lookup.id_taxa_obs, source_priority
+		LEFT JOIN api.taxa_vernacular_sources USING (source_name)
+		where match_type is not null and match_type <> 'complex'
+		order by v_lookup.id_taxa_obs, match_type, taxa_vernacular.rank_order desc, source_priority
 	), best_vernacular as (
 		select
 			ver_en.id_taxa_obs,
 			ver_en.name as vernacular_en,
 			ver_fr.name as vernacular_fr
-		from (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'eng' order by id_taxa_obs, source_priority NULLS LAST) as ver_en
-		left join (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'fra' order by id_taxa_obs, source_priority NULLS LAST) as ver_fr
+		from (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'eng')  as ver_en
+		left join (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'fra') as ver_fr
 			on ver_en.id_taxa_obs = ver_fr.id_taxa_obs
 	), vernacular_group as (
 		select 
