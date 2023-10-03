@@ -83,7 +83,7 @@
         max_year integer DEFAULT 9999
     )
     -- RETURNS TABLE (json_collection json) AS $$
-    RETURNS table (json_collection json) AS $$
+    RETURNS json AS $$
     DECLARE
         out_json json;
     BEGIN
@@ -93,74 +93,75 @@
         IF (taxa_group_key IS NOT NULL AND taxa_keys IS NOT NULL) THEN
             RAISE 'ONLY one of parameters `taxa_group_keys` `taxaKeys` can be specified';
         END IF;
-        RETURN QUERY
-            WITH taxa as (
-                SELECT UNNEST(taxa_keys) as id_taxa_obs
-                UNION
-                SELECT id_taxa_obs
-                FROM taxa_obs_group_lookup
-                where id_group = taxa_group_key
-            ), sensitive as (
-                SELECT
-                    bool_and(id_group is not null) sensitive -- ALL belongs to sensitive group
-                FROM taxa
-                LEFT JOIN (
-                    SELECT * FROM taxa_obs_group_lookup
-                    WHERE short_group = 'SENSITIVE'
-                ) as sensitive_group USING (id_taxa_obs)
-            ), scale as (
-                select atlas_api.get_scale(region_type, $2, sensitive) as scale
-                from sensitive
-            ), map_regions as (
+        WITH taxa as (
+            SELECT UNNEST(taxa_keys) as id_taxa_obs
+            UNION
+            SELECT id_taxa_obs
+            FROM taxa_obs_group_lookup
+            where id_group = taxa_group_key
+        ), sensitive as (
             SELECT
-                web_regions.fid,
-                web_regions.type,
-                web_regions.scale,
-                regions.scale_desc,
-                regions.name,
-                regions.extra,
-                web_regions.geom
-            FROM atlas_api.web_regions, regions, scale
-            WHERE
-                web_regions.type = $1
-                AND ST_Intersects(
-                    web_regions.geom,
-                    ST_MakeEnvelope(x_min, y_min, x_max, y_max, 4326))
-                AND web_regions.scale = scale.scale
-                AND web_regions.fid = regions.fid
-                AND web_regions.type = regions.type
-            ), obs_summary as (
-                SELECT
-                    fid,
-                    count(distinct(id_taxa_obs)) AS count_species,
-                    sum(count_obs) AS count_obs
-                FROM atlas_api.obs_region_counts counts 
-                JOIN taxa using (id_taxa_obs)
-                WHERE type = region_type and scale = (select scale from scale)
-                    AND year_obs >= $9 and year_obs <= $10
-                GROUP BY fid
-            ), features as (
+                bool_and(id_group is not null) sensitive -- ALL belongs to sensitive group
+            FROM taxa
+            LEFT JOIN (
+                SELECT * FROM taxa_obs_group_lookup
+                WHERE short_group = 'SENSITIVE'
+            ) as sensitive_group USING (id_taxa_obs)
+        ), scale as (
+            select atlas_api.get_scale(region_type, $2, sensitive) as scale
+            from sensitive
+        ), map_regions as (
+        SELECT
+            web_regions.fid,
+            web_regions.type,
+            web_regions.scale,
+            regions.scale_desc,
+            regions.name,
+            regions.extra,
+            web_regions.geom
+        FROM atlas_api.web_regions, regions, scale
+        WHERE
+            web_regions.type = $1
+            AND ST_Intersects(
+                web_regions.geom,
+                ST_MakeEnvelope(x_min, y_min, x_max, y_max, 4326))
+            AND web_regions.scale = scale.scale
+            AND web_regions.fid = regions.fid
+            AND web_regions.type = regions.type
+        ), obs_summary as (
             SELECT
-                map_regions.fid,
-                map_regions.type,
-                map_regions.scale,
-                map_regions.scale_desc,
-                map_regions.name,
-                map_regions.extra,
-                map_regions.geom,
-                obs_summary.count_species,
-                obs_summary.count_obs
-            FROM map_regions
-            LEFT JOIN obs_summary ON map_regions.fid = obs_summary.fid
-            )
-            -- Make the results into a geojson
-            SELECT
+                fid,
+                count(distinct(id_taxa_obs)) AS count_species,
+                sum(count_obs) AS count_obs
+            FROM atlas_api.obs_region_counts counts 
+            JOIN taxa using (id_taxa_obs)
+            WHERE type = region_type and scale = (select scale from scale)
+                AND year_obs >= $9 and year_obs <= $10
+            GROUP BY fid
+        ), features as (
+        SELECT
+            map_regions.fid,
+            map_regions.type,
+            map_regions.scale,
+            map_regions.scale_desc,
+            map_regions.name,
+            map_regions.extra,
+            map_regions.geom,
+            obs_summary.count_species,
+            obs_summary.count_obs
+        FROM map_regions
+        LEFT JOIN obs_summary ON map_regions.fid = obs_summary.fid
+        )
+        -- Make the results into a geojson
+        SELECT
             json_build_object(
                 'type', 'FeatureCollection',
                 'features', json_agg(ST_AsGeoJSON(features.*)::json),
                 'sensitive', (SELECT sensitive from sensitive)
-                )
-            FROM features;
+            )
+        INTO out_json
+        FROM features;
+        RETURN json_agg(out_json);
     END;
     $$ LANGUAGE plpgsql STABLE;
 
@@ -320,8 +321,7 @@
                 valid_scientific_name,
                 vernacular_en,
                 vernacular_fr
-            FROM api.taxa
-            WHERE id_taxa_obs = $1
+            FROM api.__taxa_join_attributes(ARRAY[$1])
         ), counts as (
             SELECT
                 sum(counts.count_obs) as obs_count
