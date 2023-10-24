@@ -263,8 +263,8 @@ CREATE OR REPLACE VIEW api.taxa AS (
 CREATE OR REPLACE FUNCTION api.match_taxa (taxa_name TEXT)
 RETURNS SETOF api.taxa
 AS $$
-SELECT t.* FROM api.taxa t, public.match_taxa_obs(taxa_name) match_t
-WHERE id_taxa_obs = match_t.id
+select *
+from api.__taxa_join_attributes(match_taxa_obs_id($1))
 $$ LANGUAGE SQL STABLE;
 
 ALTER FUNCTION api.match_taxa(taxa_name text) OWNER TO postgres;

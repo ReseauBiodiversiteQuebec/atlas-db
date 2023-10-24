@@ -4,37 +4,48 @@ DROP FUNCTION IF EXISTS get_taxa_ref_relatives(integer);
 DROP VIEW IF EXISTS observations_taxa_ref CASCADE;
 DROP FUNCTION IF EXISTS get_observation_from_taxa(text, text);
 
+CREATE OR REPLACE VIEW taxa_obs_synonym_lookup AS (
+    SELECT
+        distinct match_obs.id_taxa_obs, synonym_obs.id_taxa_obs AS id_taxa_obs_synonym
+    FROM taxa_obs_ref_lookup AS match_obs
+    LEFT JOIN taxa_obs_ref_lookup AS synonym_obs
+        ON match_obs.id_taxa_ref_valid = synonym_obs.id_taxa_ref
+    WHERE match_obs.is_parent IS FALSE
+        AND synonym_obs.is_parent IS FALSE
+        AND match_obs.id_taxa_obs <> synonym_obs.id_taxa_obs
+);
+
 
 --Procedures MATCHING OF SCIENTIFIC NAME
-DROP FUNCTION IF EXISTS match_taxa_obs(text);
-CREATE FUNCTION match_taxa_obs(
+DROP FUNCTION IF EXISTS match_taxa_obs_id(text);
+CREATE OR REPLACE FUNCTION match_taxa_obs_id(
 	taxa_name text	
 )
-RETURNS SETOF taxa_obs AS $$
+-- returns integer[]
+RETURNS integer[] AS $$
     with match_taxa_obs as (
         (
-            select ref_lookup.id_taxa_obs as id
-            from taxa_ref
-            left join taxa_obs_ref_lookup ref_lookup
-                on taxa_ref.id = ref_lookup.id_taxa_ref
-            where LOWER(taxa_ref.scientific_name) = LOWER(taxa_name)
+            SELECT distinct(match_obs.id_taxa_obs) as id_taxa_obs
+            FROM taxa_ref AS matched_ref
+            LEFT JOIN taxa_obs_ref_lookup AS match_obs
+                ON matched_ref.id = match_obs.id_taxa_ref
+            WHERE matched_ref.scientific_name ILIKE $1
         ) UNION (
-            select vernacular_lookup.id_taxa_obs as id
+            select distinct(vernacular_lookup.id_taxa_obs) as id_taxa_obs
             from taxa_vernacular
             left join taxa_obs_vernacular_lookup vernacular_lookup
                 on taxa_vernacular.id = vernacular_lookup.id_taxa_vernacular
-            where LOWER(taxa_vernacular.name) = LOWER(taxa_name)
+            where taxa_vernacular.name ILIKE $1
         )
+    ), synonym_taxa_obs as (
+        select id_taxa_obs from match_taxa_obs
+        UNION
+        SELECT id_taxa_obs_synonym as id_taxa_obs
+        from taxa_obs_synonym_lookup
+        JOIN match_taxa_obs USING (id_taxa_obs)
     )
-    select distinct taxa_obs.*
-    from match_taxa_obs
-    left join taxa_obs_ref_lookup search_lookup
-        on match_taxa_obs.id = search_lookup.id_taxa_obs
-    left join taxa_obs_ref_lookup synonym_lookup
-        on search_lookup.id_taxa_ref_valid = synonym_lookup.id_taxa_ref_valid
-    left join taxa_obs
-	    on synonym_lookup.id_taxa_obs = taxa_obs.id
-    where search_lookup.match_type is not null;
+    select distinct on (id_taxa_obs) array_agg(id_taxa_obs) id_taxa_obs
+    from synonym_taxa_obs
 $$ LANGUAGE sql;
 
 DROP FUNCTION IF EXISTS match_taxa_ref_relatives(text);
