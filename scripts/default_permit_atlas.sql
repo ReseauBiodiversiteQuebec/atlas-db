@@ -51,6 +51,7 @@ ALTER DEFAULT PRIVILEGES FOR USER postgres IN SCHEMA api GRANT EXECUTE ON FUNCTI
 --- Before role can access to something inside of schema the usage privilege has to be granted
 GRANT USAGE ON SCHEMA public TO read_only_public;
 GRANT USAGE ON SCHEMA public_api TO read_only_public;
+GRANT USAGE ON SCHEMA api TO read_only_public;
 
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM read_only_public;
 
