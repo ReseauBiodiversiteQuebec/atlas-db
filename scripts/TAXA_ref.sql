@@ -196,14 +196,24 @@ CREATE INDEX IF NOT EXISTS scientific_name_idx
 -- REFRESH taxa_ref and taxa_obs_ref_lookup
 -------------------------------------------------------------------------------
 
-    CREATE OR REPLACE FUNCTION refresh_taxa_ref()
-    RETURNS void AS
-    $$
-    BEGIN
-        DELETE FROM public.taxa_obs_ref_lookup;
-        DELETE FROM public.taxa_ref;
-        PERFORM public.insert_taxa_ref_from_taxa_obs(
-            id, scientific_name)
-        FROM public.taxa_obs;
-    END;
-    $$ LANGUAGE 'plpgsql';
+CREATE OR REPLACE FUNCTION refresh_taxa_ref()
+RETURNS void AS
+$$
+DECLARE
+    taxa_obs_record RECORD;
+BEGIN
+    DELETE FROM public.taxa_obs_ref_lookup;
+    DELETE FROM public.taxa_ref;
+    FOR taxa_obs_record IN SELECT * FROM public.taxa_obs LOOP
+        BEGIN
+            PERFORM public.insert_taxa_ref_from_taxa_obs(
+            taxa_obs_record.id, taxa_obs_record.scientific_name
+            );
+        EXCEPTION
+            WHEN OTHERS THEN
+            RAISE NOTICE 'Error inserting record with id % and scientific name %', taxa_obs_record.id, taxa_obs_record.scientific_name;
+            CONTINUE;
+        END;
+    END LOOP;
+END;
+$$ LANGUAGE 'plpgsql';
