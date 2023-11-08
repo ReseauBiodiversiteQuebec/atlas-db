@@ -11,3 +11,5 @@ CREATE TABLE indicators.pheno_cycle (
 
 
 GRANT ALL PRIVILEGES ON TABLE indicators.pci TO read_write_all;
+
+GRANT ALL ON TABLE indicators.pheno_cycle TO read_write_all;
