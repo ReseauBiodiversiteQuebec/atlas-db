@@ -48,12 +48,18 @@ CREATE TABLE IF NOT EXISTS public.taxa_obs_vernacular_lookup (
     UNIQUE (id_taxa_obs, id_taxa_vernacular)
 );
 
-CREATE INDEX IF NOT EXISTS id_taxa_obs_idx
+CREATE INDEX taxa_obs_vernacular_lookup_id_taxa_obs_idx
   ON public.taxa_obs_vernacular_lookup (id_taxa_obs);
 
-CREATE INDEX IF NOT EXISTS id_taxa_vernacular_idx
+CREATE INDEX IF NOT EXISTS taxa_obs_vernacular_lookup_id_taxa_vernacular_idx
   ON public.taxa_obs_vernacular_lookup (id_taxa_vernacular);
 
+CREATE INDEX IF NOT EXISTS taxa_obs_vernacular_lookup_match_type_idx
+  ON public.taxa_obs_vernacular_lookup (match_type);
+
+CREATE INDEX IF NOT EXISTS taxa_obs_vernacular_lookup_rank_order_idx
+  ON public.taxa_vernacular (rank_order);
+  
 -- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -- % FUNCTION taxa_vernacular_from_names
 -- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -35,123 +35,6 @@ VALUES ('CDPNQ', 1),
 
 -- -----------------------------------------------------
 DROP FUNCTION IF EXISTS api.__taxa_join_attributes(integer[]);
-CREATE OR REPLACE FUNCTION api.__taxa_join_attributes(
-	taxa_obs_id integer[]
-) RETURNS TABLE (
-	id_taxa_obs INTEGER,
-	observed_scientific_name TEXT,
-	valid_scientific_name TEXT,
-	rank TEXT,
-	vernacular_en TEXT,
-	vernacular_fr TEXT,
-	group_en TEXT,
-	group_fr TEXT,
-	vernacular JSON,
-	source_references JSON
-)
-AS $$
-	with all_ref as (
-		select
-			obs_lookup.id_taxa_obs,
-			taxa_ref.scientific_name valid_scientific_name,
-			taxa_ref.rank,
-			taxa_ref.source_name,
-			coalesce(source_priority, 9999) source_priority,
-			taxa_ref.source_record_id source_taxon_key
-		from taxa_obs_ref_lookup obs_lookup
-		left join taxa_ref on obs_lookup.id_taxa_ref_valid = taxa_ref.id
-		left join api.taxa_ref_sources USING (source_id)
-		WHERE obs_lookup.match_type is not null
-			AND obs_lookup.match_type != 'complex'
-			AND obs_lookup.id_taxa_obs = ANY($1)
-		ORDER BY obs_lookup.id_taxa_obs, source_priority
-	), agg_ref as (
-		select
-			id_taxa_obs,
-			json_agg(json_build_object(
-			   'source_name', source_name,
-			   'valid_scientific_name', valid_scientific_name,
-			   'rank', rank, 
-			   'source_taxon_key', source_taxon_key)) as source_references
-		from all_ref
-		group by (id_taxa_obs)
-	), best_ref as (
-		select
-			distinct on (id_taxa_obs)
-			id_taxa_obs,
-			valid_scientific_name,
-			rank
-		from all_ref
-		order by id_taxa_obs, source_priority asc
-	), obs_group as (
-		select
-			distinct on (group_lookup.id_taxa_obs)
-			group_lookup.id_taxa_obs,
-			coalesce(taxa_groups.vernacular_en, 'others') as group_en,
-			coalesce(taxa_groups.vernacular_fr, 'autres') as group_fr
-		from taxa_obs_group_lookup group_lookup
-		left join taxa_groups on group_lookup.id_group = taxa_groups.id
-		where taxa_groups.level = 1
-			AND group_lookup.id_taxa_obs = ANY($1)
-	), vernacular_all as(
-		select
-			v_lookup.id_taxa_obs, taxa_vernacular.*,
-			coalesce(source_priority, 9999) source_priority,
-			match_type,
-			coalesce(taxa_vernacular.rank_order, -1) rank_order
-		from taxa_obs_vernacular_lookup v_lookup
-		left join taxa_vernacular on v_lookup.id_taxa_vernacular = taxa_vernacular.id
-		LEFT JOIN api.taxa_vernacular_sources USING (source_name)
-		where match_type is not null and match_type <> 'complex'
-			AND v_lookup.id_taxa_obs = ANY($1)
-		order by v_lookup.id_taxa_obs, match_type, taxa_vernacular.rank_order desc, source_priority
-	), best_vernacular as (
-		select
-			ver_en.id_taxa_obs,
-			ver_en.name as vernacular_en,
-			ver_fr.name as vernacular_fr
-		from (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'eng')  as ver_en
-		left join (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'fra') as ver_fr
-			on ver_en.id_taxa_obs = ver_fr.id_taxa_obs
-	), vernacular_group as (
-		select 
-			vernacular_all.id_taxa_obs,
-			json_agg(json_build_object(
-				'name', vernacular_all.name,
-				'source', vernacular_all.source_name,
-				'source_taxon_key', vernacular_all.source_record_id,
-				'language', vernacular_all.language
-			)) as vernacular
-		from vernacular_all
-		group by vernacular_all.id_taxa_obs
-	)
-	select
-		best_ref.id_taxa_obs,
-        taxa_obs.scientific_name observed_scientific_name,
-		best_ref.valid_scientific_name,
-		best_ref.rank,
-		best_vernacular.vernacular_en,
-		best_vernacular.vernacular_fr,
-		obs_group.group_en,
-		obs_group.group_fr,
-		vernacular_group.vernacular,
-		agg_ref.source_references
-	from best_ref
-	left join taxa_obs on taxa_obs.id = best_ref.id_taxa_obs
-	left join vernacular_group
-		on best_ref.id_taxa_obs = vernacular_group.id_taxa_obs
-	left join obs_group
-		on best_ref.id_taxa_obs = obs_group.id_taxa_obs
-	left join best_vernacular
-		on best_ref.id_taxa_obs = best_vernacular.id_taxa_obs
-	left join agg_ref
-		on best_ref.id_taxa_obs = agg_ref.id_taxa_obs
-	ORDER BY
-		best_ref.id_taxa_obs,
-        best_vernacular.vernacular_en NULLS LAST
-$$ LANGUAGE sql STABLE;
-
-
 
 -- -----------------------------------------------------------------------------
 -- VIEW api.taxa
@@ -160,7 +43,7 @@ $$ LANGUAGE sql STABLE;
 -- -----------------------------------------------------------------------------
 
 -- DROP VIEW if exists api.taxa CASCADE;
-CREATE OR REPLACE VIEW api.taxa AS (
+CREATE MATERIALIZED VIEW api.taxa AS (
 	with all_ref as (
 		select
 			obs_lookup.id_taxa_obs,
@@ -259,12 +142,21 @@ CREATE OR REPLACE VIEW api.taxa AS (
         best_vernacular.vernacular_en NULLS LAST
 );
 
+CREATE INDEX IF NOT EXISTS taxa_observed_scientific_name_idx
+ON api.taxa (observed_scientific_name);
+
+CREATE INDEX IF NOT EXISTS taxa_valid_scientific_name_idx
+ON api.taxa (valid_scientific_name);
+
+CREATE INDEX IF NOT EXISTS taxa_rank_idx
+ON api.taxa (rank);
+
 -- DROP FUNCTION if exists api.match_taxa CASCADE;
 CREATE OR REPLACE FUNCTION api.match_taxa (taxa_name TEXT)
 RETURNS SETOF api.taxa
 AS $$
-select *
-from api.__taxa_join_attributes(match_taxa_obs_id($1))
+select taxa.* from api.taxa, match_taxa_obs($1) taxa_obs
+WHERE id_taxa_obs = taxa_obs.id
 $$ LANGUAGE SQL STABLE;
 
 ALTER FUNCTION api.match_taxa(taxa_name text) OWNER TO postgres;
@@ -298,11 +190,32 @@ RETURNS json AS $$
 $$ LANGUAGE sql STABLE;
 
 DROP FUNCTION IF EXISTS api.taxa_autocomplete_temp (text, integer);
+DROP FUNCTION IF EXISTS api.taxa_autocomplete_temp(text, integer);
 CREATE OR REPLACE FUNCTION api.taxa_autocomplete_temp(name text, out_limit integer DEFAULT 20)
 RETURNS json AS $$
-	with matches as (
+	with ref_matches as (
+			select
+				distinct on (taxa_ref.scientific_name)
+				ref_lu.id_taxa_obs, taxa_ref.scientific_name matched_name,
+				coalesce(taxa_ref."rank", '') as rank,
+				ref_lu.match_type
+			from taxa_obs_ref_lookup ref_lu, taxa_ref
+			where ref_lu.id_taxa_ref = taxa_ref.id
+				and taxa_ref.scientific_name ilike '%' || $1 || '%'
+			order by taxa_ref.scientific_name, taxa_ref.rank nulls last
+	), vernacular_matches as (
 		select
-			id_taxa_obs, matched_name, rank,
+				distinct on (taxa_vernacular.name)
+				id_taxa_obs, taxa_vernacular.name matched_name,
+				coalesce(taxa_vernacular."rank", '') as rank,
+				v_lu.match_type
+			from taxa_vernacular
+			join taxa_obs_vernacular_lookup v_lu on v_lu.id_taxa_vernacular = taxa_vernacular.id
+			where taxa_vernacular.name ilike '%' || $1 || '%'
+			order by taxa_vernacular.name, taxa_vernacular.rank nulls last
+	), matches as (
+		select
+			sub_m.id_taxa_obs, sub_m.matched_name, sub_m.rank,
 			CASE
 				WHEN match_type = 'parent'
 					or match_type = 'complex_common_parent'
@@ -318,25 +231,7 @@ RETURNS json AS $$
 				ELSE 3
 			END as order_rank
 		from (
-			(select
-				distinct on (taxa_vernacular.name)
-				id_taxa_obs, taxa_vernacular.name matched_name,
-				coalesce(taxa_vernacular."rank", '') as rank,
-				v_lu.match_type
-			from taxa_vernacular
-			join taxa_obs_vernacular_lookup v_lu on v_lu.id_taxa_vernacular = taxa_vernacular.id
-			where taxa_vernacular.name ilike '%' || $1 || '%'
-			order by taxa_vernacular.name, taxa_vernacular.rank nulls last)
-			union
-			(select
-				distinct on (taxa_ref.scientific_name)
-				ref_lu.id_taxa_obs, taxa_ref.scientific_name matched_name,
-				coalesce(taxa_ref."rank", '') as rank,
-				ref_lu.match_type
-			from taxa_obs_ref_lookup ref_lu, taxa_ref
-			where ref_lu.id_taxa_ref = taxa_ref.id
-				and taxa_ref.scientific_name ilike '%' || $1 || '%'
-			order by taxa_ref.scientific_name, taxa_ref.rank nulls last)
+            SELECT * FROM ref_matches union SELECT * FROM vernacular_matches
 		) as sub_m
 		order by order_rank, matched_name, rank nulls last
 		LIMIT $2
@@ -453,9 +348,9 @@ $$ LANGUAGE sql STABLE;
 
 -- TEST FUNCTION
 -- SELECT * FROM api.taxa_autocomplete_temp('Acer');
--- SELECT * FROM api.taxa_autocomplete('Acer', 1);
+-- SELECT * FROM api.taxa_autocomplete_temp('Acer', 1);
 -- TEST FOR SPECIES OUT OF QUEBEC
--- SELECT * FROM api.taxa_autocomplete('
+SELECT * FROM api.taxa_autocomplete_temp('Dryobates villosus');
 
 
 CREATE OR REPLACE FUNCTION api.get_taxa_groups(taxa_keys integer[]) RETURNS SETOF api.taxa

@@ -1,6 +1,4 @@
 -- Clean previous taxa_functions
-DROP FUNCTION IF EXISTS get_taxa_obs_from_name(text, text);
-DROP FUNCTION IF EXISTS get_taxa_ref_relatives(integer);
 DROP VIEW IF EXISTS observations_taxa_ref CASCADE;
 DROP FUNCTION IF EXISTS get_observation_from_taxa(text, text);
 
@@ -17,12 +15,12 @@ CREATE OR REPLACE VIEW taxa_obs_synonym_lookup AS (
 
 
 --Procedures MATCHING OF SCIENTIFIC NAME
-DROP FUNCTION IF EXISTS match_taxa_obs_id(text);
-CREATE OR REPLACE FUNCTION match_taxa_obs_id(
+DROP FUNCTION IF EXISTS match_taxa_obs(text);
+CREATE OR REPLACE FUNCTION match_taxa_obs(
 	taxa_name text	
 )
 -- returns integer[]
-RETURNS integer[] AS $$
+RETURNS SETOF taxa_obs AS $$
     with match_taxa_obs as (
         (
             SELECT distinct(match_obs.id_taxa_obs) as id_taxa_obs
@@ -44,8 +42,9 @@ RETURNS integer[] AS $$
         from taxa_obs_synonym_lookup
         JOIN match_taxa_obs USING (id_taxa_obs)
     )
-    select distinct on (id_taxa_obs) array_agg(id_taxa_obs) id_taxa_obs
-    from synonym_taxa_obs
+    select distinct on (id_taxa_obs) taxa_obs.*
+    from synonym_taxa_obs, taxa_obs
+    where id_taxa_obs = taxa_obs.id
 $$ LANGUAGE sql;
 
 DROP FUNCTION IF EXISTS match_taxa_ref_relatives(text);
