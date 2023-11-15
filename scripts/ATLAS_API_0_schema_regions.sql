@@ -46,42 +46,35 @@
     CREATE TABLE atlas_api.regions_zoom_lookup (
         type text,
         scale integer,
-        zoom integer
+        zoom integer,
+        name_en text DEFAULT NULL,
+        name_fr text DEFAULT NULL,
+        show_sensitive boolean DEFAULT FALSE
     );
 
-    ALTER TABLE atlas_api.regions_zoom_lookup ADD COLUMN name_en VARCHAR(50) DEFAULT NULL;
-    ALTER TABLE atlas_api.regions_zoom_lookup ADD COLUMN name_fr VARCHAR(50) DEFAULT NULL;
-    ALTER TABLE atlas_api.regions_zoom_lookup ADD COLUMN show_sensitive BOOLEAN DEFAULT FALSE;
-
     -- Insert the zoom levels for each region type and scale
-    INSERT INTO atlas_api.regions_zoom_lookup (type, name_fr, name_en, scale, zoom, show_sensitive)
-    VALUES
-        ('admin', 'Limites administratives', 'Administrative boundaries', 1, 4, TRUE), -- Quebec
-        ('admin', 'Limites administratives', 'Administrative boundaries', 2, 5, TRUE), -- Regions admin
-        ('admin', 'Limites administratives', 'Administrative boundaries', 3, 7, TRUE), -- MRC
-        ('admin', 'Limites administratives', 'Administrative boundaries', 4, 10, FALSE), -- Municipalités
-        ('protected', 'Aires protégées', 'Protected areas', 1, 8, TRUE),
-        ('hex', 'Hexagones', 'Hexagons', 250, 4, TRUE),
-        ('hex', 'Hexagones', 'Hexagons', 100, 5, TRUE),
-        ('hex', 'Hexagones', 'Hexagons', 50, 6, FALSE),
-        ('hex', 'Hexagones', 'Hexagons', 20, 7, FALSE),
-        ('hex', 'Hexagones', 'Hexagons', 10, 9, FALSE),
-        ('hex', 'Hexagones', 'Hexagons', 5, 10, FALSE),
-        ('cadre_eco', 'Cadre écologique', 'Ecological framework', 1, 5, TRUE),
-        ('cadre_eco', 'Cadre écologique', 'Ecological framework', 2, 6, TRUE),
-        ('cadre_eco', 'Cadre écologique', 'Ecological framework', 3, 7, TRUE),
-        ('cadre_eco', 'Cadre écologique', 'Ecological framework', 4, 9, FALSE);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('admin', 4, 10, 'Administrative boundaries', 'Limites administratives', false);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('admin', 1, 4, 'Administrative boundaries', 'Limites administratives', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('admin', 2, 5, 'Administrative boundaries', 'Limites administratives', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('admin', 3, 7, 'Administrative boundaries', 'Limites administratives', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('hex', 5, 10, 'Hexagons', 'Hexagones', false);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('hex', 20, 7, 'Hexagons', 'Hexagones', false);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('hex', 10, 9, 'Hexagons', 'Hexagones', false);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('hex', 50, 6, 'Hexagons', 'Hexagones', false);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('hex', 100, 5, 'Hexagons', 'Hexagones', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('hex', 250, 4, 'Hexagons', 'Hexagones', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('cadre_eco', 4, 9, 'Ecological framework', 'Cadre écologique', false);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('cadre_eco', 3, 7, 'Ecological framework', 'Cadre écologique', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('cadre_eco', 2, 6, 'Ecological framework', 'Cadre écologique', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('cadre_eco', 1, 5, 'Ecological framework', 'Cadre écologique', true);
+    INSERT INTO atlas_api.regions_zoom_lookup VALUES ('protected', 1, 8, 'Protected areas', 'Aires protégées', true);
+
 
     CREATE INDEX IF NOT EXISTS regions_zoom_lookup_type_idx ON atlas_api.regions_zoom_lookup (type);
 
     CREATE INDEX IF NOT EXISTS regions_zoom_lookup_zoom_idx ON atlas_api.regions_zoom_lookup (zoom);
 
     CREATE INDEX IF NOT EXISTS regions_zoom_lookup_show_sensitive_idx ON atlas_api.regions_zoom_lookup (show_sensitive);
-
-        CREATE OR REPLACE VIEW atlas_api.region_types AS
-        SELECT DISTINCT type, name_en, name_fr
-        FROM atlas_api.regions_zoom_lookup
-        WHERE "type" in ('admin', 'hex', 'cadre_eco');
 
         -- CREATE FUNCTION to get the scale for a given region type and zoom level
         CREATE OR REPLACE FUNCTION atlas_api.get_scale(type text, zoom integer, is_sensitive boolean)
@@ -169,4 +162,3 @@
     CREATE INDEX web_regions_scale_idx ON atlas_api.web_regions (scale);
 
     CREATE INDEX web_regions_type_scale_idx ON atlas_api.web_regions (type, scale);
-

@@ -228,9 +228,10 @@
         ), region_type_scale as (
             select
                 show_sensitive,
-                region_type_fr as name_fr,
-                region_type_en as name_en,
-                regions.name as region_name
+                regions.scale_desc_fr as tag_fr,
+                regions.scale_desc_en as tag_en,
+                regions.name as name_fr,
+                regions.name as name_en
             from atlas_api.regions_zoom_lookup rlu, regions
             where regions.fid = region_fid and regions.type = region_type
                 and rlu.type = region_type and rlu.scale = regions.scale
@@ -272,13 +273,11 @@
                 'taxa_tags_en', groups_en
             ) AS taxa_filter_tags,
             json_build_object(
-                'tags_fr', region_type_scale.name_fr,
-                'tags_en', region_type_scale.name_en,
+                'tags_fr', region_type_scale.tag_fr,
+                'tags_en', region_type_scale.tag_en,
                 -- name is the string before parenthesis in the name field
-                'name_fr', regexp_replace(region_name, ' \(.+\)', ''),
-                'name_en', regexp_replace(region_name, ' \(.+\)', ''),
-                -- subtitle is the string between parenthesis in the name field
-                'subtitle', regexp_replace(region_name, '^.+\((.+)\)$', '\1')
+                'name_fr', regexp_replace(region_type_scale.name_fr, ' \(.+\)', ''),
+                'name_en', regexp_replace(region_type_scale.name_en, ' \(.+\)', '')
             ) AS region_filter_tags,
             coalesce(obs_counts.count_obs::integer, 0),
             coalesce(array_length(obs_counts.taxa_list, 1)::integer, 0) as taxa_count,
