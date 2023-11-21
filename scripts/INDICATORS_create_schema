@@ -1,0 +1,16 @@
+-- SCHEMA: indicators
+
+-- DROP SCHEMA IF EXISTS indicators ;
+
+CREATE SCHEMA IF NOT EXISTS indicators;
+
+ALTER SCHEMA indicators OWNER TO read_write_all;
+
+GRANT ALL ON SCHEMA indicators TO read_write_all;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA indicators TO read_write_all;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA indicators TO read_write_all;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA indicators TO read_write_all;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres in schema indicators GRANT ALL PRIVILEGES ON TABLES TO read_write_all;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres in schema indicators GRANT ALL PRIVILEGES ON FUNCTIONS TO read_write_all;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres in schema indicators GRANT ALL PRIVILEGES ON SEQUENCES TO read_write_all;

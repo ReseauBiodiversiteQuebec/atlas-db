@@ -1,0 +1,14 @@
+CREATE TABLE indicators.pci (
+  id SERIAL PRIMARY KEY,
+  valid_scientific_name text NOT NULL,
+  years integer[] NOT NULL,
+  fit_q10 numeric[],
+  se_fit_q10 numeric[],
+  fit_q90 numeric[],
+  se_fit_q90 numeric[],
+  created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+GRANT ALL PRIVILEGES ON TABLE indicators.pci TO read_write_all;

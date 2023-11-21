@@ -1,0 +1,15 @@
+CREATE TABLE indicators.pheno_cycle (
+  id SERIAL PRIMARY KEY,
+  valid_scientific_name text NOT NULL,
+  julian_day integer[] NOT NULL,
+  mean_obs_count numeric[],
+  fit numeric[],
+  se_fit numeric[],
+  created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+GRANT ALL PRIVILEGES ON TABLE indicators.pci TO read_write_all;
+
+GRANT ALL ON TABLE indicators.pheno_cycle TO read_write_all;
