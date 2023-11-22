@@ -12,9 +12,11 @@
 CREATE EXTENSION IF NOT EXISTS plpython3u;
 
 -- CREATE FUNCTION TO ACCESS REFERENCE TAXA FROM GLOBAL NAMES
+DROP FUNCTION IF EXISTS public.match_taxa_sources(text, text);
 CREATE OR REPLACE FUNCTION public.match_taxa_sources(
     name text,
-    name_authorship text DEFAULT NULL)
+    name_authorship text DEFAULT NULL,
+    parent_scientific_name text DEFAULT NULL)
 RETURNS TABLE (
     source_name text,
     source_id numeric,
@@ -34,7 +36,7 @@ AS $function$
 from bdqc_taxa.taxa_ref import TaxaRef
 import plpy
 try:
-  return TaxaRef.from_all_sources(name, name_authorship)
+  return TaxaRef.from_all_sources(name, name_authorship, parent_scientific_name)
 except Exception as e:
   plpy.notice(f'Failed to match_taxa_sources: {name} {name_authorship}')
   raise Exception(e)
@@ -119,11 +121,12 @@ CREATE INDEX IF NOT EXISTS scientific_name_idx
 -- CREATE FUNCTIONS to update taxa_ref from taxa_obs records
 -------------------------------------------------------------------------------
 
-    -- DROP FUNCTION IF EXISTS insert_taxa_ref_from_taxa_obs(integer, text, text) CASCADE;
+    -- DROP FUNCTION IF EXISTS insert_taxa_ref_from_taxa_obs(integer, text, text);
     CREATE OR REPLACE FUNCTION insert_taxa_ref_from_taxa_obs(
         taxa_obs_id integer,
         taxa_obs_scientific_name text,
-        taxa_obs_authorship text DEFAULT NULL
+        taxa_obs_authorship text DEFAULT NULL,
+        taxa_obs_parent_scientific_name text DEFAULT NULL
     )
     RETURNS void AS
     $BODY$
@@ -131,7 +134,7 @@ CREATE INDEX IF NOT EXISTS scientific_name_idx
         DROP TABLE IF EXISTS temp_src_ref;
         CREATE TEMPORARY TABLE temp_src_ref AS (
             SELECT *
-            FROM public.match_taxa_sources(taxa_obs_scientific_name, taxa_obs_authorship)
+            FROM public.match_taxa_sources(taxa_obs_scientific_name, taxa_obs_authorship, taxa_obs_parent_scientific_name)
         );
 
         INSERT INTO public.taxa_ref (
@@ -183,10 +186,10 @@ CREATE INDEX IF NOT EXISTS scientific_name_idx
 
     -- TEST
         BEGIN;
-        INSERT INTO taxa_obs (id, scientific_name)
-        VALUES (99999, 'Panthera leo');
+        INSERT INTO taxa_obs (id, scientific_name, parent_scientific_name)
+        VALUES (99999, 'Panthera leo', 'Mammalia');
 
-        SELECT * FROM public.insert_taxa_ref_from_taxa_obs(99999, 'Panthera leo');
+        SELECT * FROM public.insert_taxa_ref_from_taxa_obs(99999, 'Panthera leo', NULL, 'Mammalia');
 
         SELECT * FROM public.taxa_obs_ref_lookup
         WHERE id_taxa_obs = 99999;
@@ -207,13 +210,40 @@ BEGIN
     FOR taxa_obs_record IN SELECT * FROM public.taxa_obs LOOP
         BEGIN
             PERFORM public.insert_taxa_ref_from_taxa_obs(
-            taxa_obs_record.id, taxa_obs_record.scientific_name
+            taxa_obs_record.id, taxa_obs_record.scientific_name, taxa_obs_record.authorship, taxa_obs_record.parent_scientific_name
             );
         EXCEPTION
             WHEN OTHERS THEN
             RAISE NOTICE 'Error inserting record with id % and scientific name %', taxa_obs_record.id, taxa_obs_record.scientific_name;
             CONTINUE;
         END;
+    END LOOP;
+END;
+$$ LANGUAGE 'plpgsql';
+
+--------------------------------------------------------------------------------
+-- CREATE FUNCTION public.fix_taxa_obs_parent_scientific_name
+-- DESCRIPTION When conflicting parent_scientific_name are found in taxa_obs,
+--  this function will update taxa_obs and taxa_obs_ref_lookup to match
+--  the parent_scientific_name of the taxa_obs record
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION fix_taxa_obs_parent_scientific_name(
+    scientific_name text, parent_scientific_name text)
+RETURNS void AS
+$$
+DECLARE
+  taxa_obs_record RECORD;
+BEGIN
+    UPDATE public.taxa_obs SET parent_scientific_name = $2 WHERE taxa_obs.scientific_name = $1;
+
+    FOR taxa_obs_record IN SELECT * FROM public.taxa_obs WHERE taxa_obs.scientific_name = $1
+    LOOP
+        DELETE FROM public.taxa_obs_ref_lookup WHERE id_taxa_obs = taxa_obs_record.id;
+
+        PERFORM public.insert_taxa_ref_from_taxa_obs(
+            taxa_obs_record.id, taxa_obs_record.scientific_name, taxa_obs_record.authorship, taxa_obs_record.parent_scientific_name
+        );
     END LOOP;
 END;
 $$ LANGUAGE 'plpgsql';

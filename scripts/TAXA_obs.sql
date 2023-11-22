@@ -13,6 +13,7 @@
         scientific_name text NOT NULL,
         authorship text,
         rank text,
+        parent_scientific_name text,
         created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
         modified_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
         modified_by text DEFAULT CURRENT_USER NOT NULL,

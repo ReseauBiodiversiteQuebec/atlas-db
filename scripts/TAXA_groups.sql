@@ -79,7 +79,7 @@ CREATE TABLE public.taxa_group_members (
     scientific_name text
 );
 
-
+DELETE FROM public.taxa_group_members;
 COPY public.taxa_group_members (short, scientific_name) FROM stdin;
 AMPHIBIANS	Amphibia
 BIRDS	Aves
