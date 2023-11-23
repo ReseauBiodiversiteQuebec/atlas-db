@@ -19,8 +19,8 @@ theme:
 
 nav:
   - Home: index.md
-  # - Using the Database:
-      # - Managing Ecological Data: ecological_data.md
+  - Using the Database:
+      - Managing Ecological Observations: managing_observations.md
       # - Managing Taxonomy: managing_taxonomy.md
       # - Data Access for Researchers: data_access.md
       # - Data Portal API: api_guide.md
@@ -44,10 +44,6 @@ markdown_extensions:
       permalink: true
 repo_url: https://github.com/ReseauBiodiversiteQuebec/atlas-db
 repo_name: ReseauBiodiversiteQuebec/atlas-db
-# extra:
-#   social:
-#     - type: github
-#       link: https://github.com/ReseauBiodiversiteQuebec/atlas-db
 
 
 # Commands to create
