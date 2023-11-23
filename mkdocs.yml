@@ -1,0 +1,55 @@
+site_name: Atlas DB / Biodiversité Québec Database
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
+  palette:
+    primary: 'teal'
+    accent: 'amber'
+  font:
+    text: Lato
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.instant
+    - toc.integrate
+    - toc.follow
+  toc_depth: 2
+
+nav:
+  - Home: index.md
+  # - Using the Database:
+      # - Managing Ecological Data: ecological_data.md
+      # - Managing Taxonomy: managing_taxonomy.md
+      # - Data Access for Researchers: data_access.md
+      # - Data Portal API: api_guide.md
+  - Schema Reference:
+      - Table Observations: public_observations.md
+      - Table Datasets: public_datasets.md
+      - Table Taxa Obs: public_taxa_obs.md
+      - Table Variables: public_variables.md
+      - Table Efforts & lookup table: public_efforts_obs_efforts.md
+  # - Additional Resources:
+  #     - Data Model: data_model.md
+  #     - Security and Permissions: security.md
+  #     - Performance and Optimization: performance.md
+  #     - Backup and Recovery: backup_recovery.md
+  #     - Change Log: changelog.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+repo_url: https://github.com/ReseauBiodiversiteQuebec/atlas-db
+repo_name: ReseauBiodiversiteQuebec/atlas-db
+# extra:
+#   social:
+#     - type: github
+#       link: https://github.com/ReseauBiodiversiteQuebec/atlas-db
+
+
+# Commands to create
+# To serve the documentation locally: mkdocs serve
+# To build the static site: mkdocs build
