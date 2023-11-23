@@ -58,18 +58,8 @@ The database is organized in the following roles:
 
 ## Documentation
 
-Documentation is provided by markdown files in the `docs` folder. It is compiled using mkdocs with the material theme. Configuration is provided by the `mkdocs.yml` file.
+Documentation is available at [https://reseaubiodiversitequebec.github.io/atlas-db/](https://reseaubiodiversitequebec.github.io/atlas-db/).
 
-To install mkdocs, run the following command:
+Documentation is created using markdown files in the `docs` folder. It is compiled using `mkdocs` with the material theme. Configuration is provided by the `mkdocs.yml` file. See [Material for MkDocs website](https://squidfunk.github.io/mkdocs-material/) for more information.
 
-```bash
-pip install mkdocs-material
-```
-
-To compile the documentation, run the following command:
-
-```bash
-mkdocs build
-```
-
-See [Material for MkDocs website](https://squidfunk.github.io/mkdocs-material/) for more information.
+Build & deploy is done using GitHub Actions. The workflow is defined in `.github/workflows/mkdocs_build_deploy.yml`. It is triggered on push to the `main` branch.

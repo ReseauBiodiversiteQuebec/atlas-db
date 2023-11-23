@@ -1,0 +1,32 @@
+name: Build and Deploy MkDocs Site
+
+on:
+  push:
+    branches:
+      - main  # Set this to your default branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'  # Use the Python version that matches your project setup
+
+    - name: Install MkDocs and Extensions
+      run: |
+        python -m pip install --upgrade pip
+        pip install mkdocs mkdocs-material  # Install MkDocs and any additional themes or plugins you use
+
+    - name: Build MkDocs Site
+      run: mkdocs build
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./site
