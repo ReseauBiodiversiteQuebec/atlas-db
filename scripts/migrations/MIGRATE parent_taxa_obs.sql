@@ -148,15 +148,15 @@ WHERE taxa_obs.id = taxa_obs_ref_lookup.id_taxa_obs
 
 ROLLBACK;
 
-CREATE OR REPLACE FUNCTION fix_taxa_obs_parent_scientific_name(scientific_name text, parent_scientific_name text)
+CREATE OR REPLACE FUNCTION fix_taxa_obs_parent_scientific_name(id_taxa_obs integer, parent_scientific_name text)
 RETURNS void AS
 $$
 DECLARE
   taxa_obs_record RECORD;
 BEGIN
-    UPDATE public.taxa_obs SET parent_scientific_name = $2 WHERE taxa_obs.scientific_name = $1;
+    UPDATE public.taxa_obs SET parent_scientific_name = $2 WHERE taxa_obs.id = $1;
 
-    FOR taxa_obs_record IN SELECT * FROM public.taxa_obs WHERE taxa_obs.scientific_name = $1
+    FOR taxa_obs_record IN SELECT * FROM public.taxa_obs WHERE taxa_obs.id = $1
     LOOP
         DELETE FROM public.taxa_obs_ref_lookup WHERE id_taxa_obs = taxa_obs_record.id;
 
@@ -167,13 +167,13 @@ BEGIN
 END;
 $$ LANGUAGE 'plpgsql';
 
--- TEST SALIX
-SELECT public.fix_taxa_obs_parent_scientific_name('Gallinula galeata', 'Chordata');
+-- TEST SALIX (Gallinula galeata)
+SELECT public.fix_taxa_obs_parent_scientific_name(126352, 'Chordata');
 SELECT taxa_ref.*
 FROM taxa_obs, taxa_ref, taxa_obs_ref_lookup
 WHERE taxa_obs.id = taxa_obs_ref_lookup.id_taxa_obs
     AND taxa_ref.id = taxa_obs_ref_lookup.id_taxa_ref
-    AND taxa_obs.scientific_name = 'Gallinula'
+    AND taxa_obs.id = 126352
     AND taxa_ref.rank = 'phylum';
 
 select * from api.match_taxa('Gallinula');
