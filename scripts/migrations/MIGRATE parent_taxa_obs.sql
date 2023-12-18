@@ -167,11 +167,11 @@ DECLARE
   scientific_name_rec record;
 BEGIN
     -- Update taxa_ref
-    UPDATE public.taxa_obs SET parent_scientific_name = $2 WHERE taxa_obs.id = $1;
+    UPDATE public.taxa_obs SET parent_scientific_name = $2, updated_at = CURRENT_TIMESTAMP WHERE taxa_obs.id = $1;
 
     FOR taxa_obs_record IN SELECT * FROM public.taxa_obs WHERE taxa_obs.id = $1
     LOOP
-        DELETE FROM public.taxa_obs_ref_lookup WHERE id_taxa_obs = taxa_obs_record.id;
+        DELETE FROM public.taxa_obs_ref_lookup WHERE public.taxa_obs_ref_lookup.id_taxa_obs = taxa_obs_record.id;
 
         PERFORM public.insert_taxa_ref_from_taxa_obs(
             taxa_obs_record.id, taxa_obs_record.scientific_name, taxa_obs_record.authorship, taxa_obs_record.parent_scientific_name
@@ -189,11 +189,11 @@ BEGIN
         where taxa_ref.id = taxa_obs_ref_lookup.id_taxa_ref
             and taxa_obs_ref_lookup.id_taxa_obs = taxa_obs.id
             and taxa_obs_vernacular_lookup.id_taxa_obs = taxa_obs.id
-            and taxa_obs.id = $1;
+            and taxa_obs.id = $1
     LOOP
         BEGIN
-            DELETE from taxa_obs_vernacular_lookup where id_taxa_vernacular = scientific_name_rec.id_taxa_vernacular;
-            DELETE from taxa_vernacular where id = scientific_name_rec.id_taxa_vernacular;
+            DELETE from taxa_obs_vernacular_lookup where taxa_obs_vernacular_lookup.id_taxa_vernacular = scientific_name_rec.id_taxa_vernacular;
+            DELETE from taxa_vernacular where taxa_vernacular.id = scientific_name_rec.id_taxa_vernacular;
 
             PERFORM insert_taxa_vernacular_using_ref(scientific_name_rec.id);
         EXCEPTION
@@ -204,13 +204,20 @@ BEGIN
 END;
 $$ LANGUAGE 'plpgsql';
 
--- TEST SALIX
-SELECT public.fix_taxa_obs_parent_scientific_name('Gallinula galeata', 'Chordata');
+-- TEST SALIX (Gallinula galeata; id = 735)
+SELECT * FROM public.taxa_obs WHERE scientific_name = 'Salix'
+SELECT * FROM public.taxa_obs WHERE id = 735
+
+SELECT public.fix_taxa_obs_parent_scientific_name(735, 'Tracheophyta');
+
 SELECT taxa_ref.*
 FROM taxa_obs, taxa_ref, taxa_obs_ref_lookup
 WHERE taxa_obs.id = taxa_obs_ref_lookup.id_taxa_obs
     AND taxa_ref.id = taxa_obs_ref_lookup.id_taxa_ref
-    AND taxa_obs.scientific_name = 'Gallinula'
-    AND taxa_ref.rank = 'phylum';
+    AND taxa_obs.id = 735;
 
-select * from api.match_taxa('Gallinula');
+SELECT taxa_vernacular.*
+FROM taxa_obs, taxa_vernacular, taxa_obs_vernacular_lookup
+WHERE taxa_obs.id = taxa_obs_vernacular_lookup.id_taxa_obs
+    AND taxa_vernacular.id = taxa_obs_vernacular_lookup.id_taxa_vernacular
+    AND taxa_obs.id = 735;
