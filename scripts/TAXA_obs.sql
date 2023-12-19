@@ -17,7 +17,7 @@
         created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
         modified_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
         modified_by text DEFAULT CURRENT_USER NOT NULL,
-        UNIQUE (scientific_name, authorship)
+        UNIQUE (scientific_name, authorship, rank, parent_scientific_name)
     );
 
     CREATE FUNCTION IF NOT EXISTS trigger_set_timestamp()
@@ -36,6 +36,10 @@
 
     CREATE INDEX IF NOT EXISTS taxa_obs_scientific_name_idx
     ON public.taxa_obs (scientific_name);
+
+-- ALTER TABLE public.taxa_obs
+-- ADD CONSTRAINT unique_taxa_obs
+-- UNIQUE (scientific_name, authorship, rank, parent_scientific_name);
 
 -------------------------------------------------------------------------------
 -- ALTER public.observations ADD COLUMN id_taxa_obs
