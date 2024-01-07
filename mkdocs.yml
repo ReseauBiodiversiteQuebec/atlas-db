@@ -21,6 +21,7 @@ nav:
   - Home: index.md
   - Using the Database:
       - Managing Ecological Observations: managing_observations.md
+      - Maintenance of Database resources: resources_maintenance.md
       # - Managing Taxonomy: managing_taxonomy.md
       # - Data Access for Researchers: data_access.md
       # - Data Portal API: api_guide.md
