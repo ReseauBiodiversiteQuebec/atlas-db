@@ -122,6 +122,8 @@ ADD CONSTRAINT outside_quebec_unique_id UNIQUE (id);
 -- 6. ----------------------------------------------------------
 --  ADD TRIGGER FOR INSERTIONS
 
+ALTER TABLE observations ALTER COLUMN within_quebec SET DEFAULT FALSE;
+
 CREATE OR REPLACE FUNCTION update_within_quebec()
 RETURNS TRIGGER AS $$
 DECLARE
