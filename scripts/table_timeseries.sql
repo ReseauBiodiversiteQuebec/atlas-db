@@ -45,3 +45,9 @@ GRANT ALL ON TABLE public.time_series TO admins;
 
 CREATE INDEX IF NOT EXISTS id_taxa_idx
   ON public.time_series (id_taxa);
+
+ALTER TABLE time_series
+ADD FOREIGN KEY (id_taxa_obs)
+REFERENCES taxa_obs (id)
+ON DELETE NO ACTION
+ON UPDATE NO ACTION;
