@@ -23,7 +23,7 @@ The `taxa_obs` table is structured to record raw taxonomic information directly 
 
 ### Additional Constraints
 
-- **Unique Constraint**: `taxa_obs_unique_rows` ensures that each combination of `scientific_name`, `authorship`, and `rank` is unique within the table.
+- **Unique Constraint**: `taxa_obs_unique_rows` ensures that each combination of `scientific_name`, `authorship`, `rank`, `parent_scientific_name` is unique within the table.
 
 ### Indexes
 

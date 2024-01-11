@@ -210,6 +210,9 @@ SELECT * FROM public.taxa_obs WHERE id = 735
 
 SELECT public.fix_taxa_obs_parent_scientific_name(735, 'Tracheophyta');
 
+-- TEST SALIX (Gallinula galeata)
+SELECT public.fix_taxa_obs_parent_scientific_name(126352, 'Chordata');
+
 SELECT taxa_ref.*
 FROM taxa_obs, taxa_ref, taxa_obs_ref_lookup
 WHERE taxa_obs.id = taxa_obs_ref_lookup.id_taxa_obs
@@ -221,3 +224,7 @@ FROM taxa_obs, taxa_vernacular, taxa_obs_vernacular_lookup
 WHERE taxa_obs.id = taxa_obs_vernacular_lookup.id_taxa_obs
     AND taxa_vernacular.id = taxa_obs_vernacular_lookup.id_taxa_vernacular
     AND taxa_obs.id = 735;
+    AND taxa_obs.id = 126352
+    AND taxa_ref.rank = 'phylum';
+
+select * from api.match_taxa('Gallinula');
