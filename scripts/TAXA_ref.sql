@@ -220,30 +220,3 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE 'plpgsql';
-
---------------------------------------------------------------------------------
--- CREATE FUNCTION public.fix_taxa_obs_parent_scientific_name
--- DESCRIPTION When conflicting parent_scientific_name are found in taxa_obs,
---  this function will update taxa_obs and taxa_obs_ref_lookup to match
---  the parent_scientific_name of the taxa_obs record
---------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION fix_taxa_obs_parent_scientific_name(
-    scientific_name text, parent_scientific_name text)
-RETURNS void AS
-$$
-DECLARE
-  taxa_obs_record RECORD;
-BEGIN
-    UPDATE public.taxa_obs SET parent_scientific_name = $2 WHERE taxa_obs.scientific_name = $1;
-
-    FOR taxa_obs_record IN SELECT * FROM public.taxa_obs WHERE taxa_obs.scientific_name = $1
-    LOOP
-        DELETE FROM public.taxa_obs_ref_lookup WHERE id_taxa_obs = taxa_obs_record.id;
-
-        PERFORM public.insert_taxa_ref_from_taxa_obs(
-            taxa_obs_record.id, taxa_obs_record.scientific_name, taxa_obs_record.authorship, taxa_obs_record.parent_scientific_name
-        );
-    END LOOP;
-END;
-$$ LANGUAGE 'plpgsql';
