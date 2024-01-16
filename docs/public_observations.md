@@ -79,7 +79,9 @@ Triggers are used to automatically update the `within_quebec`, `modified_at`, `d
 
 The use of table partitions in the observations table, particularly with the within_quebec column, is a strategic decision aimed at enhancing database performance. Partitioning is a highly effective method for managing large tables by splitting them into smaller, more manageable pieces. In this case, the observations_partitions schema segregates observation data into distinct partitions based on whether the observations occurred within Quebec (within_quebec = true) or outside it (within_quebec = false). This approach significantly improves query performance by allowing the database engine to quickly locate and retrieve data from a smaller subset of the table. Additionally, it simplifies maintenance tasks such as backups and data purges, as operations can be performed on individual partitions without affecting the entire dataset.
 
-Partition tables `observations_partitions.within_quebec` and `observations_partitions.outside_quebec` are created within the `observations_partitions` schema. 
+Partition tables `observations_partitions.within_quebec` and `observations_partitions.outside_quebec` are created within the `observations_partitions` schema.
+
+Partitioning is declarative, meaning that the database engine automatically determines which partition to use based on the value of the within_quebec column. This also means that triggers cannot be used to insert data into the whole table and must be created for each partition. Thus, the default value must be set to false for the within_quebec column to ensure that new observations are inserted into the outside_quebec partition by default. A trigger `update_within_quebec` on the partition `observations_partitions.outside_quebec` is used to update the within_quebec column to true and insert the observation into the within_quebec partition if the observation is within Quebec. This trigger is not used for updates, as the declarative partitioning will automatically move the observation to the correct partition if the within_quebec column is updated.
 
 #### Temporal Columns
 

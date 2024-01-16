@@ -1,48 +1,48 @@
 export PGDATABASE="atlas"
 
-out_file="dump_atlas.sql"
+schema_file="dump_atlas_schema.sql"
+public_data_file="dump_atlas_public_data.sql" # Exclude observations, efforts and related tables, regions, time_series
 obs_file="dump_test_observations.sql"
 
 # Dump users and roles
-echo "SET session_replication_role = 'replica';" > $out_file
+echo "SET session_replication_role = 'replica';" > $schema_file
 
-pg_dumpall --roles-only >> $out_file
+pg_dumpall --roles-only --no-password >> $schema_file
 
 # Add create extension postgis
-echo "CREATE EXTENSION postgis;" >> $out_file
+echo "CREATE EXTENSION postgis;" >> $schema_file
 
 # Add create extension plpython3u
-echo "CREATE EXTENSION plpython3u;" >> $out_file
+echo "CREATE EXTENSION plpython3u;" >> $schema_file
 
-grep -v "CREATE ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
-grep -v "ALTER ROLE postgres" $out_file > tmpfile && mv tmpfile $out_file
+grep -v "CREATE ROLE postgres" $schema_file > tmpfile && mv tmpfile $schema_file
+grep -v "ALTER ROLE postgres" $schema_file > tmpfile && mv tmpfile $schema_file
 
 # Dump using -s to dump only schema and -a to dump only data
 echo "Dumping schema and data..."
-pg_dump -s -n observations_partitions \
+pg_dump -s \
+    -n observations_partitions \
     -n public \
     -n api \
-    -n public_api \
     -n atlas_api \
     -n data_transfer \
-    -n observations_partitions \
-    >> $out_file
+    >> $schema_file
 
+echo "SET session_replication_role = 'replica';" > $public_data_file
 pg_dump -a \
-    -n public \
-    -n api \
-    -n public_api \
-    -n atlas_api \
-    -T observations \
-    -T obs_efforts \
-    -T public.montreal_terrestrial_limits \
-    -T public.regions \
-    -T qc_limit \
-    -T qc_region_limit \
-    -T public.cdpnq_ranges \
-    -T atlas_api.temp_obs_regions_taxa_year_counts \
-    -T public.time_series \
-    >> $out_file
+    -t public.datasets \
+    -t public.taxa_obs \
+    -t public.taxa_refs \
+    -t public.taxa_obs_ref_lookup \
+    -t public.taxa_vernacular \
+    -t public.taxa_vernacular_lookup \
+    -t public.taxa_groups \
+    -t taxa_group_members \
+    -t public.taxa_groups_lookup \
+    -t public.time_series \
+    -t atlas_api.regions_zoom_lookup \
+    -t atlas_api.sensitive_taxa_max_scale \
+    >> $public_data_file
 echo "...done"
 
 # Dump selected observations in 'test_observations.txt' file and add line to copy in sql dump
@@ -86,4 +86,4 @@ psql -c "drop table test_observations;"
 
 # Dump regions of type hex in dump_regions.sql
 echo "Dumping regions..."
-pg_dump -a -t regions > dump_regions.sql
+pg_dump --inserts -a -t regions > dump_regions.sql

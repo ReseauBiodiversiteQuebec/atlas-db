@@ -122,24 +122,25 @@ ADD CONSTRAINT outside_quebec_unique_id UNIQUE (id);
 -- 6. ----------------------------------------------------------
 --  ADD TRIGGER FOR INSERTIONS
 
-CREATE OR REPLACE FUNCTION observations_set_within_quebec_trigger()
-RETURNS TRIGGER AS
-$$
+ALTER TABLE observations ALTER COLUMN within_quebec SET DEFAULT FALSE;
+
+CREATE OR REPLACE FUNCTION update_within_quebec()
+RETURNS TRIGGER AS $$
+DECLARE
 BEGIN
-	SELECT
-		bool_or(ST_WITHIN(NEW.geom, qc_region_limit.wkb_geometry))
-	INTO NEW.within_quebec
-	FROM qc_region_limit;
-
-    IF (NEW.within_quebec IS TRUE) THEN
+    NEW.within_quebec := ST_Within(NEW.geom, (SELECT geom FROM regions WHERE type = 'admin' AND scale = 1));
+    IF (NEW.within_quebec IS NULL) THEN
+        RAISE EXCEPTION 'within_quebec is NULL';
+    ELSIF (NEW.within_quebec IS TRUE) THEN
         INSERT INTO observations_partitions.within_quebec VALUES (NEW.*);
+        RETURN NULL;
     ELSE
-        INSERT INTO observations_partitions.outside_quebec VALUES (NEW.*);
+        RETURN NEW;
     END IF;
-	RETURN NULL;
 END;
-$$ language plpgsql;
+$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER observations_set_within_quebec 
-BEFORE INSERT on public.observations
-	FOR EACH ROW EXECUTE FUNCTION observations_set_within_quebec_trigger();
+CREATE TRIGGER update_within_quebec_trigger
+BEFORE INSERT ON observations_partitions.outside_quebec
+FOR EACH ROW
+EXECUTE FUNCTION update_within_quebec();

@@ -40,31 +40,34 @@
 
     CREATE OR REPLACE FUNCTION atlas_api.obs_region_counts_refresh()
         RETURNS void AS $$
-        INSERT INTO atlas_api.obs_region_counts (
-            type,
-            scale,
-            fid,
-            id_taxa_obs,
-            year_obs,
-            count_obs
-        )
-        SELECT
-            regions.type,
-            regions.scale,
-            regions.fid,
-            o.id_taxa_obs,
-            o.year_obs,
-            count(o.id) AS count_obs
-        FROM 
-            regions,
-            observations o,
-            -- FILTER AVAILABLE regions and scale using atlas_api.regions_zoom_lookup
-            atlas_api.regions_zoom_lookup
-        WHERE st_within(o.geom, regions.geom)
-            AND o.within_quebec = regions.within_quebec
-            AND regions.type = regions_zoom_lookup.type AND regions.scale = regions_zoom_lookup.scale
-        GROUP BY regions.type, regions.fid, o.id_taxa_obs, o.year_obs;
-        $$ LANGUAGE SQL;
+        BEGIN
+            DELETE FROM atlas_api.obs_region_counts;
+            INSERT INTO atlas_api.obs_region_counts (
+                type,
+                scale,
+                fid,
+                id_taxa_obs,
+                year_obs,
+                count_obs
+            )
+            SELECT
+                regions.type,
+                regions.scale,
+                regions.fid,
+                o.id_taxa_obs,
+                o.year_obs,
+                count(o.id) AS count_obs
+            FROM 
+                regions,
+                observations o,
+                -- FILTER AVAILABLE regions and scale using atlas_api.regions_zoom_lookup
+                atlas_api.regions_zoom_lookup
+            WHERE st_within(o.geom, regions.geom)
+                AND o.within_quebec = regions.within_quebec
+                AND regions.type = regions_zoom_lookup.type AND regions.scale = regions_zoom_lookup.scale
+            GROUP BY regions.type, regions.fid, o.id_taxa_obs, o.year_obs;
+        END;
+        $$ LANGUAGE plpgsql;
 
 -- -----------------------------------------------------------------------------
 -- CREATE FUNCTION obs_map to return tile x, y and zoom for a given region type, zoom, y, x with summary of observations

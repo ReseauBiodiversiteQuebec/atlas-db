@@ -38,32 +38,34 @@
     CREATE FUNCTION atlas_api.obs_regions_taxa_datasets_counts_refresh()
         RETURNS void AS
         $$
-        DELETE FROM atlas_api.obs_regions_taxa_datasets_counts;
-        INSERT INTO atlas_api.obs_regions_taxa_datasets_counts (
-            fid,
-            type,
-            id_taxa_obs,
-            id_datasets,
-            min_year,
-            max_year,
-            count_obs
-        )
-        SELECT
-            regions.fid,
-            regions.type,
-            o.id_taxa_obs,
-            o.id_datasets,
-            min(o.year_obs) AS min_year,
-            max(o.year_obs) AS max_year,
-            count(o.id) AS count_obs
-        FROM 
-            regions,
-            observations o,
-            -- FILTER AVAILABLE regions and scale using atlas_api.regions_zoom_lookup
-            atlas_api.regions_zoom_lookup
-        WHERE st_within(o.geom, regions.geom) AND o.within_quebec = regions.within_quebec
-            AND regions.type = regions_zoom_lookup.type AND regions.scale = regions_zoom_lookup.scale
-        GROUP BY regions.fid, o.id_datasets, o.id_taxa_obs;
+        BEGIN
+            DELETE FROM atlas_api.obs_regions_taxa_datasets_counts;
+            INSERT INTO atlas_api.obs_regions_taxa_datasets_counts (
+                fid,
+                type,
+                id_taxa_obs,
+                id_datasets,
+                min_year,
+                max_year,
+                count_obs
+            )
+            SELECT
+                regions.fid,
+                regions.type,
+                o.id_taxa_obs,
+                o.id_datasets,
+                min(o.year_obs) AS min_year,
+                max(o.year_obs) AS max_year,
+                count(o.id) AS count_obs
+            FROM 
+                regions,
+                observations o,
+                -- FILTER AVAILABLE regions and scale using atlas_api.regions_zoom_lookup
+                atlas_api.regions_zoom_lookup
+            WHERE st_within(o.geom, regions.geom) AND o.within_quebec = regions.within_quebec
+                AND regions.type = regions_zoom_lookup.type AND regions.scale = regions_zoom_lookup.scale
+            GROUP BY regions.fid, o.id_datasets, o.id_taxa_obs;
+        END;
         $$ LANGUAGE plpgsql;
 
 

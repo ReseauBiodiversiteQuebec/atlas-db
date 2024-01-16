@@ -41,10 +41,15 @@ sudo systemctl restart postgresql
 
 The database is organized in the following schemas:
 - `public`: contains the tables and views used to store biodiversity data
+
 - `api`: contains the tables, views and functions used to store and retrieve joined data from the `public` schema. This schema is used by the API.
+
 - `data_transfer`: contains the tables and views used to store temporary data. This schema may be used by users with `read_write_all` role.
+
 - `atlas_api`: contains the tables, views and functions used to store and retrieve joined data from the `public` schema. These objects are used by the API for the web atlas portal.
+
 - `observations_partitions`: contains partitionned tables used to store observations. Observations are partitionned by column `within_quebec`.
+
 - Deprecated. `public_api`: This schema is deprecated and will be removed in a future version and should not be used anymore. It contains the tables, views and functions used to store and retrieve joined data from the `public` schema. These objects are used by the API for the web atlas portal.
 
 ## Roles & permissions
