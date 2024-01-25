@@ -31,7 +31,7 @@ Triggers are used to automatically update the `within_quebec`, `modified_at`, `d
 | **org_event**          | Character Varying         | *Optional*. Identifier of the event in the original source. | - |
 | **org_id_obs**         | Character Varying         | *Optional*. Original identifier of the observation in the original source.     | - |
 | **id_datasets**        | Integer                   | The identifier of the dataset to which the observation belongs. | Not Null, Foreign key |
-| **id_taxa_obs**        | Integer                   | Identifier for the observed taxon.                      | Foreign key |
+| **id_taxa_obs**        | Integer                   | Identifier for the observed taxon.                      | Not Null, Foreign key |
 | **geom**               | Geometry(Point, 4326)     | The geometry of the coordinates of the observation.        | Not Null |
 | **year_obs**           | Integer                   | The year of the observation.                            | Not Null |
 | **month_obs**          | Integer                   | The month of the observation.                           | - |

@@ -6,7 +6,7 @@ obs_file="dump_test_observations.sql"
 # Dump users and roles
 echo "SET session_replication_role = 'replica';" > $out_file
 
-pg_dumpall --roles-only >> $out_file
+pg_dumpall --roles-only --no-role-passwords >> $schema_file
 
 # Add create extension postgis
 echo "CREATE EXTENSION postgis;" >> $out_file
