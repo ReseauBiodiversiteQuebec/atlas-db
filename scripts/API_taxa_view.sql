@@ -94,15 +94,15 @@ CREATE MATERIALIZED VIEW api.taxa AS (
 		from taxa_obs_vernacular_lookup v_lookup
 		left join taxa_vernacular on v_lookup.id_taxa_vernacular = taxa_vernacular.id
 		LEFT JOIN api.taxa_vernacular_sources USING (source_name)
-		where match_type is not null and match_type <> 'complex'
+		where match_type IN ('exact', 'partialexact') and match_type <> 'complex'
 		order by v_lookup.id_taxa_obs, match_type, taxa_vernacular.rank_order desc, source_priority
 	), best_vernacular as (
 		select
 			ver_en.id_taxa_obs,
 			ver_en.name as vernacular_en,
 			ver_fr.name as vernacular_fr
-		from (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'eng')  as ver_en
-		left join (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'fra') as ver_fr
+		from (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'eng' ORDER BY vernacular_all.id_taxa_obs, vernacular_all.source_priority, vernacular_all.match_type)  as ver_en
+		left join (select distinct on (id_taxa_obs) id_taxa_obs, name from vernacular_all where language = 'fra' ORDER BY vernacular_all.id_taxa_obs, vernacular_all.source_priority, vernacular_all.match_type) as ver_fr
 			on ver_en.id_taxa_obs = ver_fr.id_taxa_obs
 	), vernacular_group as (
 		select 
@@ -137,6 +137,7 @@ CREATE MATERIALIZED VIEW api.taxa AS (
 		on best_ref.id_taxa_obs = best_vernacular.id_taxa_obs
 	left join agg_ref
 		on best_ref.id_taxa_obs = agg_ref.id_taxa_obs
+	-- where best_vernacular.vernacular_fr ilike 'vie'
 	ORDER BY
 		best_ref.id_taxa_obs,
         best_vernacular.vernacular_en NULLS LAST
