@@ -43,6 +43,24 @@ DROP FUNCTION IF EXISTS api.__taxa_join_attributes(integer[]);
 -- -----------------------------------------------------------------------------
 
 -- DROP VIEW if exists api.taxa CASCADE;
+/*
+	This selection creates a materialized view named 'api.taxa' that combines information from multiple tables to provide a comprehensive view of taxonomy data.
+	
+	The selection consists of several common table expressions (CTEs) that perform various data transformations and aggregations.
+	
+	CTEs:
+	
+	- all_ref: Retrieves information about taxa references for observed taxa, including scientific name, rank, source name, source priority, and source taxon key.
+	- agg_ref: Aggregates the taxa references for each observed taxa into a JSON array.
+	- best_ref: Selects the best taxa reference for each observed taxa based on source priority.
+	- obs_group: Retrieves the group information for each observed taxa, including the English and French vernacular names of the group.
+	- vernacular_all: Retrieves all vernacular names for observed taxa, including source priority, match type, and rank order.
+	- best_vernacular: Selects the best vernacular names for each observed taxa based on source priority and language (English and French).
+	- vernacular_group: Aggregates the vernacular names for each observed taxa into a JSON array.
+	
+	The final SELECT statement combines the information from the CTEs to generate the desired output, including observed scientific name, valid scientific name, rank, vernacular names (English and French), group names (English and French), vernacular names (aggregated), and taxa references (aggregated).
+*/
+
 CREATE MATERIALIZED VIEW api.taxa AS (
 	with all_ref as (
 		select
@@ -137,7 +155,6 @@ CREATE MATERIALIZED VIEW api.taxa AS (
 		on best_ref.id_taxa_obs = best_vernacular.id_taxa_obs
 	left join agg_ref
 		on best_ref.id_taxa_obs = agg_ref.id_taxa_obs
-	-- where best_vernacular.vernacular_fr ilike 'vie'
 	ORDER BY
 		best_ref.id_taxa_obs,
         best_vernacular.vernacular_en NULLS LAST
