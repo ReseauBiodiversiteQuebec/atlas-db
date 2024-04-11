@@ -199,9 +199,15 @@ CREATE INDEX IF NOT EXISTS scientific_name_idx
 -- REFRESH taxa_ref and taxa_obs_ref_lookup
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION refresh_taxa_ref()
-RETURNS void AS
-$$
+-- public.refresh_taxa_ref_complete()
+-- Completly delete and refresh all of taxa_ref and taxa_obs_ref_lookup
+CREATE OR REPLACE FUNCTION public.refresh_taxa_ref_complete(
+	)
+    RETURNS void
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE PARALLEL UNSAFE
+AS $BODY$
 DECLARE
     taxa_obs_record RECORD;
 BEGIN
@@ -219,4 +225,44 @@ BEGIN
         END;
     END LOOP;
 END;
-$$ LANGUAGE 'plpgsql';
+$BODY$;
+
+-- public.refresh_taxa_ref_partial()
+-- Updates taxa_ref and taxa_obs_ref_lookup instead of deleting everything and reinject everything
+-- Only difference with public.refresh_taxa_ref_complete() is that it feeds from the CTE subset_taxa_obs which only
+-- takes the rows from taxa_obs that are not yet in taxa_obs_ref_lookup
+CREATE OR REPLACE FUNCTION public.refresh_taxa_ref_partial(
+	)
+    RETURNS void
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE PARALLEL UNSAFE
+AS $BODY$
+DECLARE
+    subset_count INT;
+    taxa_obs_record RECORD;
+BEGIN
+    CREATE TEMP TABLE IF NOT EXISTS subset_taxa_obs AS
+        SELECT *
+        FROM public.taxa_obs
+        WHERE id NOT IN (SELECT id_taxa_obs FROM public.taxa_obs_ref_lookup);
+
+    SELECT COUNT(*) INTO subset_count FROM subset_taxa_obs;
+
+    RAISE NOTICE 'Processing % rows from taxa_obs', subset_count;
+
+    FOR taxa_obs_record IN SELECT * FROM subset_taxa_obs LOOP
+        BEGIN
+            PERFORM public.insert_taxa_ref_from_taxa_obs(
+            taxa_obs_record.id, taxa_obs_record.scientific_name, taxa_obs_record.authorship, taxa_obs_record.parent_scientific_name
+            );
+        EXCEPTION
+            WHEN OTHERS THEN
+            RAISE NOTICE 'Error inserting record with id % and scientific name %', taxa_obs_record.id, taxa_obs_record.scientific_name;
+            CONTINUE;
+        END;
+    END LOOP;
+    
+    DROP TABLE IF EXISTS subset_taxa_obs;
+END;
+$BODY$;
