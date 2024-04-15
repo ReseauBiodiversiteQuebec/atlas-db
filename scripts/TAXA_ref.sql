@@ -199,7 +199,7 @@ CREATE INDEX IF NOT EXISTS scientific_name_idx
 -- REFRESH taxa_ref and taxa_obs_ref_lookup
 -------------------------------------------------------------------------------
 
--- public.refresh_taxa_ref_complete()
+-- public.refresh_taxa_ref()
 -- Completly delete and refresh all of taxa_ref and taxa_obs_ref_lookup
 CREATE OR REPLACE FUNCTION public.refresh_taxa_ref(
 	)
@@ -224,5 +224,69 @@ BEGIN
             CONTINUE;
         END;
     END LOOP;
+END;
+$BODY$;
+
+-- Partially refresh taxa_ref, taxa_obs_ref_lookup,
+-- taxa_vernacular and taxa_obs_vernacular_lookup
+CREATE OR REPLACE FUNCTION public.refresh_taxa_partial()
+RETURNS void
+LANGUAGE 'plpgsql'
+COST 100
+VOLATILE PARALLEL UNSAFE
+AS $BODY$
+DECLARE
+    subset_count INT;
+    taxa_obs_record RECORD;
+    scientific_name_rec RECORD;
+BEGIN
+    -- Create temporary table to only inject/refresh new data in taxa_obs
+    CREATE TEMP TABLE IF NOT EXISTS subset_taxa_obs AS
+        SELECT *
+        FROM public.taxa_obs
+        WHERE id NOT IN (SELECT id_taxa_obs FROM public.taxa_obs_ref_lookup);
+
+    -- Count how many taxa are being processed
+    SELECT COUNT(*) INTO subset_count FROM subset_taxa_obs;
+    RAISE NOTICE 'Processing % rows from taxa_obs', subset_count;
+
+    RAISE NOTICE 'Start processing taxa_ref';
+    -- Refresh taxa_ref based on subset_taxa_obs
+    FOR taxa_obs_record IN SELECT * FROM subset_taxa_obs LOOP
+        BEGIN
+            PERFORM public.insert_taxa_ref_from_taxa_obs(
+            taxa_obs_record.id, taxa_obs_record.scientific_name, taxa_obs_record.authorship, taxa_obs_record.parent_scientific_name
+            );
+        EXCEPTION
+            WHEN OTHERS THEN
+            RAISE NOTICE 'Error inserting record with id % and scientific name %', taxa_obs_record.id, taxa_obs_record.scientific_name;
+            CONTINUE;
+        END;
+    END LOOP;
+
+    RAISE NOTICE 'Start processing taxa_vernacular';
+    -- Refresh taxa_vernacular based on newly injected taxa_ref
+    -- that are linked to the new taxa_obs
+    -- Loop through distinct taxa_ref records
+    FOR scientific_name_rec IN
+        SELECT DISTINCT ON (taxa_ref.scientific_name, taxa_ref.rank)
+            taxa_ref.id,
+            taxa_ref.scientific_name,
+            LOWER(taxa_ref.rank)
+        FROM subset_taxa_obs
+        INNER JOIN taxa_obs_ref_lookup ON subset_taxa_obs.id = taxa_obs_ref_lookup.id_taxa_obs
+        INNER JOIN taxa_ref ON taxa_obs_ref_lookup.id_taxa_ref_valid = taxa_ref.id    
+    LOOP
+        BEGIN
+            -- Insert taxa_vernacular using taxa_ref_id
+            PERFORM insert_taxa_vernacular_using_ref(scientific_name_rec.id);
+        EXCEPTION
+            WHEN OTHERS THEN
+                RAISE NOTICE 'insert_taxa_vernacular_using_ref(%s) failed for taxa (%s): %', scientific_name_rec.id, scientific_name_rec.scientific_name, SQLERRM;
+        END;
+    END LOOP;
+
+    -- Drop temporary table
+    DROP TABLE IF EXISTS subset_taxa_obs;
 END;
 $BODY$;
