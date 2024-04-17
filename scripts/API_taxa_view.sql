@@ -162,6 +162,14 @@ AS
         best_vernacular.vernacular_en NULLS LAST
 WITH DATA;
 
+ALTER TABLE IF EXISTS api.taxa
+    OWNER TO coleo;
+
+GRANT SELECT ON TABLE api.taxa TO PUBLIC;
+GRANT SELECT ON TABLE api.taxa TO read_only_all;
+GRANT SELECT ON TABLE api.taxa TO read_only_public;
+GRANT INSERT, SELECT, UPDATE, TRUNCATE, REFERENCES, TRIGGER ON TABLE api.taxa TO read_write_all;
+
 CREATE INDEX IF NOT EXISTS taxa_observed_scientific_name_idx
 ON api.taxa (observed_scientific_name);
 
