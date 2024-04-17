@@ -36,3 +36,12 @@ CREATE OR REPLACE VIEW api.observations AS (
 	left join variables var
 		on obs.id_variables = var.id
 );
+
+ALTER TABLE api.observations
+    OWNER TO coleo;
+
+GRANT SELECT ON TABLE api.observations TO PUBLIC;
+GRANT ALL ON TABLE api.observations TO coleo;
+GRANT SELECT ON TABLE api.observations TO read_only_all;
+GRANT SELECT ON TABLE api.observations TO read_only_public;
+GRANT INSERT, SELECT, UPDATE, TRUNCATE, REFERENCES, TRIGGER ON TABLE api.observations TO read_write_all;
