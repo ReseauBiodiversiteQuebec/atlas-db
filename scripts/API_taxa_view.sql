@@ -159,7 +159,18 @@ select taxa.* from api.taxa, match_taxa_obs($1) taxa_obs
 WHERE id_taxa_obs = taxa_obs.id
 $$ LANGUAGE SQL STABLE;
 
-ALTER FUNCTION api.match_taxa(taxa_name text) OWNER TO postgres;
+ALTER FUNCTION api.match_taxa(text)
+    OWNER TO coleo;
+
+GRANT EXECUTE ON FUNCTION api.match_taxa(text) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION api.match_taxa(text) TO coleo;
+
+GRANT EXECUTE ON FUNCTION api.match_taxa(text) TO read_only_all;
+
+GRANT EXECUTE ON FUNCTION api.match_taxa(text) TO read_only_public;
+
+GRANT EXECUTE ON FUNCTION api.match_taxa(text) TO read_write_all;
 
 -- Autocomplete taxa_name
 -- DROP FUNCTION IF EXISTS api.taxa_autocomplete (text);
