@@ -288,5 +288,6 @@ BEGIN
 
     -- Drop temporary table
     DROP TABLE IF EXISTS subset_taxa_obs;
+PERFORM taxa_vernacular_fix_caribou();
 END;
 $BODY$;
