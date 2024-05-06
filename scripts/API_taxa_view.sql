@@ -28,9 +28,10 @@ DELETE FROM api.taxa_vernacular_sources;
 
 INSERT INTO api.taxa_vernacular_sources
 VALUES ('CDPNQ', 1),
-	('Bryoquel', 2),
-	('Database of Vascular Plants of Canada (VASCAN)', 3),
-	('Integrated Taxonomic Information System (ITIS)', 4);
+	('Eliso', 2),
+	('Bryoquel', 3),
+	('Database of Vascular Plants of Canada (VASCAN)', 4),
+	('Integrated Taxonomic Information System (ITIS)', 5);
 
 
 -- -----------------------------------------------------
