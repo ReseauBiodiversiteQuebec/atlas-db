@@ -425,14 +425,19 @@
 -- -----------------------------------------------------------------------------
     DROP FUNCTION atlas_api.obs_taxa_list(integer,text,integer[],integer,integer,integer);
     CREATE OR REPLACE FUNCTION atlas_api.obs_taxa_list(
-        region_fid integer DEFAULT NULL::integer,
-        region_type text DEFAULT NULL::text,
-        taxa_keys integer[] DEFAULT NULL::integer[],
-        taxa_group_key integer DEFAULT NULL::integer,
-        min_year integer DEFAULT 0,
-        max_year integer DEFAULT 9999
-    )
-    RETURNS SETOF api.taxa AS $$
+	region_fid integer DEFAULT NULL::integer,
+	region_type text DEFAULT NULL::text,
+	taxa_keys integer[] DEFAULT NULL::integer[],
+	taxa_group_key integer DEFAULT NULL::integer,
+	min_year integer DEFAULT 0,
+	max_year integer DEFAULT 9999)
+    RETURNS SETOF api.taxa 
+    LANGUAGE 'plpgsql'
+    COST 100
+    STABLE PARALLEL UNSAFE
+    ROWS 1000
+
+AS $BODY$
     BEGIN
         IF (taxa_group_key IS NULL AND taxa_keys IS NULL) THEN
             taxa_group_key := (SELECT id from taxa_groups where level = 0);
@@ -458,7 +463,7 @@
                 and rlu.type = region_type and rlu.scale = regions.scale
         ), obs_taxa as (
             SELECT
-                api.taxa_branch_tips(counts.id_taxa_obs) AS taxa_list
+                array_agg(distinct(counts.id_taxa_obs)) AS all_taxon_list
             FROM atlas_api.obs_region_counts counts, taxa
             WHERE counts.fid = $1
                 AND counts.type = $2
@@ -466,11 +471,16 @@
                 AND counts.year_obs >= $5
                 AND counts.year_obs <= $6
             GROUP BY counts.fid, counts.type
+        ), unique_taxon_list as (
+            SELECT MIN(id) AS unique_taxon_list
+            FROM taxa_obs
+            WHERE id = ANY((SELECT unnest(all_taxon_list) FROM obs_taxa))
+            GROUP BY scientific_name
         ), not_sensitive_taxa as (
             SELECT
                 array_agg(taxa.id_taxa_obs) taxa_list
             FROM (
-                SELECT UNNEST(taxa_list) as id_taxa_obs FROM obs_taxa
+                SELECT unique_taxon_list as id_taxa_obs FROM unique_taxon_list
                 ) as taxa
             LEFT JOIN (
                     select id_taxa_obs, id_group as sensitive_group from taxa_obs_group_lookup where short_group = 'SENSITIVE'
@@ -483,7 +493,8 @@
         FROM api.taxa, not_sensitive_taxa
         WHERE taxa.id_taxa_obs = ANY (not_sensitive_taxa.taxa_list);
     END;
-    $$ LANGUAGE plpgsql STABLE;
+    
+$BODY$;
 
     EXPLAIN ANALYZE select * from atlas_api.obs_taxa_list(region_fid => NULL, region_type => 'hex', min_year => 1950, max_year => 2022);
 
