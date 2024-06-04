@@ -175,24 +175,24 @@
 -- -----------------------------------------------------------------------------
 -- CREATE FUNCTION obs_summary to return species and obs counts for a given fid, taxa_keys, taxa_group_key, min_year, max_year
 -- ---------------------------------------------------------------------------
-    -- DROP FUNCTION atlas_api.obs_summary(integer,text,integer[],integer,integer,integer);
-    CREATE OR REPLACE FUNCTION atlas_api.obs_summary(
-        region_fid integer DEFAULT NULL::integer,
-        region_type text DEFAULT NULL::text,
-        taxa_keys integer[] DEFAULT NULL::integer[],
-        taxa_group_key integer DEFAULT NULL::integer,
-        min_year integer DEFAULT 0,
-        max_year integer DEFAULT 9999
-    )
-    RETURNS table (
-        fid integer,
-        taxa_filter_tags json,
-        region_filter_tags json,
-        obs_count integer,
-        taxa_count integer,
-        taxa_id_list integer[]
-    )
-    AS $$
+-- FUNCTION: atlas_api.obs_summary(integer, text, integer[], integer, integer, integer)
+
+-- DROP FUNCTION IF EXISTS atlas_api.obs_summary(integer, text, integer[], integer, integer, integer);
+
+CREATE OR REPLACE FUNCTION atlas_api.obs_summary(
+	region_fid integer DEFAULT NULL::integer,
+	region_type text DEFAULT NULL::text,
+	taxa_keys integer[] DEFAULT NULL::integer[],
+	taxa_group_key integer DEFAULT NULL::integer,
+	min_year integer DEFAULT 0,
+	max_year integer DEFAULT 9999)
+    RETURNS TABLE(fid integer, taxa_filter_tags json, region_filter_tags json, obs_count integer, taxa_count integer, taxa_count_carrousel integer, taxa_id_list integer[], carrousel_info json) 
+    LANGUAGE 'plpgsql'
+    COST 100
+    STABLE PARALLEL UNSAFE
+    ROWS 1000
+
+AS $BODY$
     DECLARE
         region_type_fr text;
         region_type_en text;
@@ -239,7 +239,8 @@
             SELECT
                 counts.fid,
                 counts.type,
-                api.taxa_branch_tips(counts.id_taxa_obs) AS taxa_list,
+                array_agg(distinct(counts.id_taxa_obs)) AS all_taxon_list,
+                api.get_unique_species(array_agg(counts.id_taxa_obs)) AS all_species_list,
                 sum(counts.count_obs) AS count_obs
             FROM atlas_api.obs_region_counts counts, taxa
             WHERE counts.fid = $1
@@ -248,23 +249,36 @@
                 AND counts.year_obs >= $5
                 AND counts.year_obs <= $6
             GROUP BY counts.fid, counts.type
-        ), taxa_list as (
+        ), unique_taxon_list as (
+              SELECT MIN(id) AS unique_taxon_list
+              FROM taxa_obs
+              WHERE id = ANY((SELECT unnest(all_taxon_list) FROM obs_counts))
+              GROUP BY scientific_name
+        ), unique_taxon_list_sensitive as (
             SELECT
-                array_agg(taxa.id_taxa_obs) taxa_list
+                taxon_list.id_taxa_obs as taxon_list
             FROM (
-                SELECT UNNEST(taxa_list) as id_taxa_obs FROM obs_counts
-                ) as taxa
+                SELECT unique_taxon_list as id_taxa_obs FROM unique_taxon_list
+                ) as taxon_list
             LEFT JOIN (
                     select id_taxa_obs, id_group as sensitive_group from taxa_obs_group_lookup where short_group = 'SENSITIVE'
-                ) as sensitive_group ON sensitive_group.id_taxa_obs = taxa.id_taxa_obs
+                ) as sensitive_group ON sensitive_group.id_taxa_obs = taxon_list.id_taxa_obs
             JOIN region_type_scale ON true
             WHERE (show_sensitive is false and sensitive_group is not null) is false
+        ), agg_unique_taxon_list as (
+            SELECT
+                array_agg(taxon_list) AS agg_unique_taxon_list
+            FROM unique_taxon_list_sensitive
         ), taxa_groups as (
             SELECT 
                 array_agg(vernacular_fr) groups_fr,
                 array_agg(vernacular_en) groups_en
-            FROM taxa_list, match_taxa_groups(taxa_list.taxa_list)
+            FROM agg_unique_taxon_list, match_taxa_groups(agg_unique_taxon_list.agg_unique_taxon_list)
             WHERE level = 1 or (21 <= id and id >= 25)
+        ), carrousel_info as (
+            select
+                atlas_api.get_carrousel_info(obs_counts.all_taxon_list, $1, $2, $5, $6) as carrousel_info
+                from obs_counts
         )
         SELECT
             region_fid,
@@ -280,12 +294,15 @@
                 'name_en', regexp_replace(region_type_scale.name_en, ' \(.+\)', '')
             ) AS region_filter_tags,
             coalesce(obs_counts.count_obs::integer, 0),
-            coalesce(array_length(obs_counts.taxa_list, 1)::integer, 0) as taxa_count,
-            taxa_list.taxa_list
-        FROM region_type_scale, taxa_list, taxa_groups
+            array_length(obs_counts.all_species_list, 1) as taxa_count,
+            array_length(agg_unique_taxon_list.agg_unique_taxon_list, 1) as taxa_count_carrousel,
+            agg_unique_taxon_list.agg_unique_taxon_list as taxa_id_list,
+            carrousel_info.carrousel_info
+        FROM region_type_scale, taxa_groups, agg_unique_taxon_list, carrousel_info
         LEFT JOIN obs_counts ON TRUE;
     END;
-    $$ LANGUAGE plpgsql STABLE;
+    
+$BODY$;
 
     -- EXPLAIN ANALYZE select * from atlas_api.obs_summary(region_fid => NULL, region_type => 'hex', min_year => 1950, max_year => 2022);
 
@@ -296,6 +313,68 @@
     -- -- REGRESSION TEST FOR hex with empy observations
     -- EXPLAIN ANALYZE select * from atlas_api.obs_summary(region_fid => 855580, region_type => 'hex', taxa_group_key => 19, min_year => 1950, max_year => 2022);
 
+-- ---------------------------------------------------------------------------
+-- CREATE FUNCTION get_carrousel_info to create list that feeds the carrousel
+------------------------------------------------------------------------------
+-- FUNCTION: atlas_api.get_carrousel_info(integer[], integer, text, integer, integer)
+
+-- DROP FUNCTION IF EXISTS atlas_api.get_carrousel_info(integer[], integer, text, integer, integer);
+
+CREATE OR REPLACE FUNCTION atlas_api.get_carrousel_info(
+	taxa_key integer[],
+	region_fid integer DEFAULT NULL::integer,
+	region_type text DEFAULT NULL::text,
+	min_year integer DEFAULT 0,
+	max_year integer DEFAULT 9999)
+    RETURNS json
+    LANGUAGE 'plpgsql'
+    COST 100
+    STABLE PARALLEL UNSAFE
+AS $BODY$
+    DECLARE out json;
+    BEGIN
+        IF (region_fid IS NULL) THEN
+            region_fid := (SELECT regions.fid from regions where regions.type = 'admin' and regions.scale = 1);
+            region_type := 'admin';
+        END IF;
+        WITH shuffled_limited_taxa AS (
+            SELECT (array_agg(val ORDER BY random()))[1:20] AS shuffled_limited_array
+            FROM unnest(($1)) AS val
+        ), taxa as (
+            SELECT
+                id_taxa_obs,
+                valid_scientific_name,
+                vernacular_en,
+                vernacular_fr
+            FROM api.__taxa_join_attributes((SELECT shuffled_limited_array FROM shuffled_limited_taxa))
+        ), counts as (
+        SELECT
+                counts.id_taxa_obs,
+                taxa.valid_scientific_name,
+                sum(counts.count_obs) AS obs_count
+            FROM atlas_api.obs_region_counts counts
+            JOIN taxa ON counts.id_taxa_obs = taxa.id_taxa_obs
+            WHERE counts.fid = $2
+                AND counts.type = $3
+                AND counts.year_obs >= $4
+                AND counts.year_obs <= $5
+            GROUP BY taxa.valid_scientific_name, counts.id_taxa_obs
+        ), attributes as (
+        SELECT
+                taxa.valid_scientific_name,
+                MIN(vernacular_fr) as vernacular_fr,
+                MIN(vernacular_en) as vernacular_en,
+                sum(counts.obs_count)
+            FROM taxa
+            JOIN counts ON taxa.id_taxa_obs = counts.id_taxa_obs
+            GROUP BY taxa.valid_scientific_name
+        )
+        SELECT json_agg(row_to_json(attributes))
+        FROM attributes
+        INTO out;
+        RETURN out;
+    END;
+$BODY$;
 
 -- ---------------------------------------------------------------------------
 -- CREATE FUNCTION obs_species_summary to download species summary for a given fid, taxa_keys, taxa_group_key, min_year, max_year
